@@ -5,6 +5,12 @@
 const API_BASE = '/api';
 
 const api = {
+    // ─── CSRF Token ───────────────────────────────────────────────────────
+    getCsrfToken() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+    },
+
     // ─── Token Management ─────────────────────────────────────────────────
     getToken() {
         return localStorage.getItem('access_token');
@@ -37,7 +43,11 @@ const api = {
     // ─── HTTP Methods ─────────────────────────────────────────────────────
     async request(endpoint, options = {}) {
         const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
-        const headers = { 'Content-Type': 'application/json', ...options.headers };
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.getCsrfToken(),
+            ...options.headers,
+        };
 
         if (this.getToken() && !options.noAuth) {
             headers['Authorization'] = `Bearer ${this.getToken()}`;

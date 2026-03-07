@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Plans — Super Admin{% endblock %}
+
+{% block body %}
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <h4><i class="fas fa-shield-alt me-2"></i>Super Admin</h4>
+        <small>Platform Control Panel</small>
+    </div>
+    <nav>
+        <div class="sidebar-section">Overview</div>
+        <a href="/superadmin/" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <div class="sidebar-section">Management</div>
+        <a href="/superadmin/restaurants/" class="nav-link"><i class="fas fa-store"></i> Restaurants</a>
+        <a href="/superadmin/users/" class="nav-link"><i class="fas fa-users"></i> Users</a>
+        <a href="/superadmin/plans/" class="nav-link active"><i class="fas fa-crown"></i> Plans</a>
+        <div class="sidebar-section">Reports</div>
+        <a href="/superadmin/orders-revenue/" class="nav-link"><i class="fas fa-chart-bar"></i> Orders & Revenue</a>
+        <div class="sidebar-section">Account</div>
+        <a href="#" class="nav-link" onclick="api.logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="top-bar">
+        <div>
+            <h4 class="fw-bold mb-0">Subscription Plans</h4>
+            <small class="text-muted">Create and manage subscription plans</small>
+        </div>
+        <button class="btn btn-primary-custom" onclick="showPlanForm()"><i class="fas fa-plus me-2"></i>Add Plan</button>
+    </div>
+
+    <div class="row g-3" id="plansList"><div class="col-12"><div class="loading-spinner"></div></div></div>
+</div>
+
+<!-- Plan Form Modal -->
+<div class="modal fade" id="planModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title fw-bold" id="planModalTitle">Add Plan</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="planEditId">
+                <div class="mb-3"><label class="form-label fw-bold">Plan Name</label><input type="text" class="form-control" id="planName"></div>
+                <div class="mb-3"><label class="form-label fw-bold">Description</label><textarea class="form-control" id="planDesc" rows="2"></textarea></div>
+                <div class="row">
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Price (Rs.)</label><input type="number" class="form-control" id="planPrice"></div>
+                    <div class="col-6 mb-3"><label class="form-label fw-bold">Billing</label>
+                        <select class="form-select" id="planCycle"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select>
+                    </div>
+                </div>
+                <h6 class="fw-bold">Limits</h6>
+                <div class="row">
+                    <div class="col-6 mb-2"><label class="form-label">Max Tables</label><input type="number" class="form-control" id="planTables" value="10"></div>
+                    <div class="col-6 mb-2"><label class="form-label">Max Menu Items</label><input type="number" class="form-control" id="planItems" value="50"></div>
+                    <div class="col-6 mb-2"><label class="form-label">Max Staff</label><input type="number" class="form-control" id="planStaff" value="5"></div>
+                    <div class="col-6 mb-2"><label class="form-label">Max Orders/Month</label><input type="number" class="form-control" id="planOrders" value="500"></div>
+                </div>
+                <h6 class="fw-bold mt-3">Features</h6>
+                <div class="row">
+                    <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="planPOS"><label class="form-check-label" for="planPOS">POS</label></div></div>
+                    <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="planKitchen"><label class="form-check-label" for="planKitchen">Kitchen Display</label></div></div>
+                    <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="planReports"><label class="form-check-label" for="planReports">Reports</label></div></div>
+                    <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="planDeals"><label class="form-check-label" for="planDeals">Deals</label></div></div>
+                    <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="planPayment"><label class="form-check-label" for="planPayment">Online Payment</label></div></div>
+                </div>
+                <div class="mt-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="planActive" checked>
+                        <label class="form-check-label fw-bold" for="planActive">Plan is Active</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary-custom" onclick="savePlan()"><i class="fas fa-save me-2"></i>Save Plan</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+if (!api.isLoggedIn()) window.location.href = '/admin-panel/login/';
+
+async function loadPlans() {
+    try {
+        const data = await api.get('/superadmin/plans/');
+        const plans = data.results || data;
+        document.getElementById('plansList').innerHTML = plans.length === 0
+            ? '<div class="col-12"><div class="empty-state"><i class="fas fa-crown"></i><p>No plans yet</p></div></div>'
+            : plans.map(p => `
+            <div class="col-md-4">
+                <div class="card-custom p-4">
+                    <div class="d-flex justify-content-between">
+                        <h5 class="fw-bold">${p.name}</h5>
+                        ${p.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}
+                    </div>
+                    ${p.description ? `<p class="text-muted small mb-2">${p.description}</p>` : ''}
+                    <div class="my-3">
+                        <span class="fs-2 fw-800" style="color:var(--primary);">${formatPrice(p.price)}</span>
+                        <span class="text-muted">/${p.billing_cycle}</span>
+                    </div>
+                    <ul class="list-unstyled">
+                        <li class="mb-1"><i class="fas fa-chair text-muted me-2"></i>${p.max_tables} Tables</li>
+                        <li class="mb-1"><i class="fas fa-utensils text-muted me-2"></i>${p.max_menu_items} Menu Items</li>
+                        <li class="mb-1"><i class="fas fa-users text-muted me-2"></i>${p.max_staff_accounts} Staff</li>
+                        <li class="mb-1"><i class="fas fa-receipt text-muted me-2"></i>${p.max_orders_per_month} Orders/Month</li>
+                        <li class="mb-1">${p.has_pos ? '<i class="fas fa-check text-success me-2"></i>' : '<i class="fas fa-times text-danger me-2"></i>'}POS</li>
+                        <li class="mb-1">${p.has_kitchen_display ? '<i class="fas fa-check text-success me-2"></i>' : '<i class="fas fa-times text-danger me-2"></i>'}Kitchen Display</li>
+                        <li class="mb-1">${p.has_reports ? '<i class="fas fa-check text-success me-2"></i>' : '<i class="fas fa-times text-danger me-2"></i>'}Reports</li>
+                        <li class="mb-1">${p.has_deals ? '<i class="fas fa-check text-success me-2"></i>' : '<i class="fas fa-times text-danger me-2"></i>'}Deals</li>
+                        <li class="mb-1">${p.has_online_payment ? '<i class="fas fa-check text-success me-2"></i>' : '<i class="fas fa-times text-danger me-2"></i>'}Online Payment</li>
+                    </ul>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-outline-custom btn-sm flex-fill" onclick='editPlan(${JSON.stringify(p).replace(/'/g, "&#39;")})'><i class="fas fa-edit me-1"></i>Edit</button>
+                        <button class="btn btn-outline-danger btn-sm flex-fill" onclick="deletePlan(${p.id})"><i class="fas fa-trash me-1"></i>Delete</button>
+                    </div>
+                </div>
+            </div>`).join('');
+    } catch (e) { showToast('Could not load plans', 'danger'); }
+}
+
+function showPlanForm() {
+    document.getElementById('planEditId').value = '';
+    document.getElementById('planName').value = '';
+    document.getElementById('planDesc').value = '';
+    document.getElementById('planPrice').value = '';
+    document.getElementById('planCycle').value = 'monthly';
+    document.getElementById('planTables').value = 10;
+    document.getElementById('planItems').value = 50;
+    document.getElementById('planStaff').value = 5;
+    document.getElementById('planOrders').value = 500;
+    document.getElementById('planPOS').checked = false;
+    document.getElementById('planKitchen').checked = false;
+    document.getElementById('planReports').checked = false;
+    document.getElementById('planDeals').checked = false;
+    document.getElementById('planPayment').checked = false;
+    document.getElementById('planActive').checked = true;
+    document.getElementById('planModalTitle').textContent = 'Add Plan';
+    new bootstrap.Modal(document.getElementById('planModal')).show();
+}
+
+function editPlan(p) {
+    document.getElementById('planEditId').value = p.id;
+    document.getElementById('planName').value = p.name;
+    document.getElementById('planDesc').value = p.description || '';
+    document.getElementById('planPrice').value = p.price;
+    document.getElementById('planCycle').value = p.billing_cycle;
+    document.getElementById('planTables').value = p.max_tables;
+    document.getElementById('planItems').value = p.max_menu_items;
+    document.getElementById('planStaff').value = p.max_staff_accounts;
+    document.getElementById('planOrders').value = p.max_orders_per_month;
+    document.getElementById('planPOS').checked = p.has_pos;
+    document.getElementById('planKitchen').checked = p.has_kitchen_display;
+    document.getElementById('planReports').checked = p.has_reports;
+    document.getElementById('planDeals').checked = p.has_deals;
+    document.getElementById('planPayment').checked = p.has_online_payment;
+    document.getElementById('planActive').checked = p.is_active;
+    document.getElementById('planModalTitle').textContent = 'Edit Plan';
+    new bootstrap.Modal(document.getElementById('planModal')).show();
+}
+
+async function savePlan() {
+    const editId = document.getElementById('planEditId').value;
+    const data = {
+        name: document.getElementById('planName').value,
+        description: document.getElementById('planDesc').value,
+        price: parseFloat(document.getElementById('planPrice').value),
+        billing_cycle: document.getElementById('planCycle').value,
+        max_tables: parseInt(document.getElementById('planTables').value),
+        max_menu_items: parseInt(document.getElementById('planItems').value),
+        max_staff_accounts: parseInt(document.getElementById('planStaff').value),
+        max_orders_per_month: parseInt(document.getElementById('planOrders').value),
+        has_pos: document.getElementById('planPOS').checked,
+        has_kitchen_display: document.getElementById('planKitchen').checked,
+        has_reports: document.getElementById('planReports').checked,
+        has_deals: document.getElementById('planDeals').checked,
+        has_online_payment: document.getElementById('planPayment').checked,
+        is_active: document.getElementById('planActive').checked,
+    };
+
+    if (!data.name) { showToast('Plan name is required', 'danger'); return; }
+    if (!data.price && data.price !== 0) { showToast('Price is required', 'danger'); return; }
+
+    try {
+        if (editId) {
+            await api.put(`/superadmin/plans/${editId}/`, data);
+            showToast('Plan updated!', 'success');
+        } else {
+            await api.post('/superadmin/plans/', data);
+            showToast('Plan created!', 'success');
+        }
+        bootstrap.Modal.getInstance(document.getElementById('planModal')).hide();
+        loadPlans();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deletePlan(id) {
+    if (!confirm('Delete this plan? Restaurants using it will need a new plan.')) return;
+    try { await api.delete(`/superadmin/plans/${id}/`); showToast('Plan deleted', 'success'); loadPlans(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadPlans();
+</script>
+{% endblock %}

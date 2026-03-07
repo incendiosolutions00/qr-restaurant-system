@@ -1,0 +1,136 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Welcome back! Here's what's happening today.{% endblock %}
+
+{% block content %}
+<!-- Stat Cards -->
+<div class="row g-3 mb-4" id="statCards">
+    <div class="col-md-3 col-6">
+        <div class="stat-card bg-gradient-orange">
+            <div class="stat-number" id="statOrders">-</div>
+            <div class="stat-label">Today's Orders</div>
+            <div class="stat-icon"><i class="fas fa-receipt"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card bg-gradient-green">
+            <div class="stat-number" id="statRevenue">-</div>
+            <div class="stat-label">Today's Revenue</div>
+            <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card bg-gradient-blue">
+            <div class="stat-number" id="statPending">-</div>
+            <div class="stat-label">Pending Orders</div>
+            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card bg-gradient-purple">
+            <div class="stat-number" id="statTables">-</div>
+            <div class="stat-label">Active Tables</div>
+            <div class="stat-icon"><i class="fas fa-chair"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Recent Orders -->
+    <div class="col-lg-8">
+        <div class="card-custom p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Recent Orders</h5>
+                <a href="/admin-panel/orders/" class="btn btn-sm btn-outline-custom">View All</a>
+            </div>
+            <div id="recentOrders"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+
+    <!-- Top Items -->
+    <div class="col-lg-4">
+        <div class="card-custom p-4">
+            <h5 class="fw-bold mb-3">Top Selling Today</h5>
+            <div id="topItems"><div class="loading-spinner"></div></div>
+        </div>
+
+        <div class="card-custom p-4 mt-3">
+            <h5 class="fw-bold mb-3">Quick Stats</h5>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Avg Order Value</span>
+                <span class="fw-bold" id="avgOrder">-</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Total Tables</span>
+                <span class="fw-bold" id="totalTables">-</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    try {
+        const data = await api.get('/restaurant/reports/dashboard/');
+        document.getElementById('statOrders').textContent = data.todays_orders;
+        document.getElementById('statRevenue').textContent = formatPrice(data.todays_revenue);
+        document.getElementById('statPending').textContent = data.pending_orders;
+        document.getElementById('statTables').textContent = `${data.active_tables}/${data.total_tables}`;
+        document.getElementById('avgOrder').textContent = formatPrice(data.avg_order_value);
+        document.getElementById('totalTables').textContent = data.total_tables;
+
+        // Top items
+        const topDiv = document.getElementById('topItems');
+        if (data.top_items_today && data.top_items_today.length > 0) {
+            topDiv.innerHTML = data.top_items_today.map((item, i) => `
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 ${i < data.top_items_today.length - 1 ? 'border-bottom' : ''}">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-light text-dark fw-bold">#${i + 1}</span>
+                        <span>${item.menu_item__name}</span>
+                    </div>
+                    <span class="badge bg-warning text-dark">${item.total_qty} sold</span>
+                </div>`).join('');
+        } else {
+            topDiv.innerHTML = '<p class="text-muted text-center">No sales yet today</p>';
+        }
+
+        // Pending badge
+        if (data.pending_orders > 0) {
+            const badge = document.getElementById('pendingBadge');
+            badge.style.display = 'inline';
+            badge.textContent = data.pending_orders;
+        }
+    } catch (e) {
+        showToast('Could not load dashboard', 'danger');
+    }
+
+    // Recent orders
+    try {
+        const orders = await api.get('/restaurant/orders/?page_size=5');
+        const container = document.getElementById('recentOrders');
+        const list = orders.results || orders;
+        if (list.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">No orders yet</p>';
+            return;
+        }
+        container.innerHTML = `<div class="table-responsive"><table class="table table-hover">
+            <thead><tr><th>Order</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th></tr></thead>
+            <tbody>${list.map(o => `<tr>
+                <td class="fw-bold">${o.order_number}</td>
+                <td>${o.table_number || '-'}</td>
+                <td>${o.items ? o.items.length : 0}</td>
+                <td class="fw-bold">${formatPrice(o.total)}</td>
+                <td><span class="badge-status badge-${o.status}">${o.status_display}</span></td>
+                <td class="text-muted">${formatDate(o.created_at)}</td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } catch {}
+}
+
+loadDashboard();
+setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}

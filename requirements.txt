@@ -1,0 +1,13 @@
+Django==6.0.3
+djangorestframework==3.16.1
+django-cors-headers==4.9.0
+django-filter==25.2
+djangorestframework-simplejwt==5.5.1
+qrcode==8.2
+Pillow==12.1.1
+python-dateutil==2.9.0.post0
+asgiref==3.11.1
+PyJWT==2.11.0
+six==1.17.0
+sqlparse==0.5.5
+tzdata==2025.3

@@ -1,0 +1,141 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_staff %}active{% endblock %}
+{% block page_title %}Staff Management{% endblock %}
+{% block page_subtitle %}Manage your restaurant team{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-primary-custom" onclick="showStaffForm()"><i class="fas fa-plus me-2"></i>Add Staff</button>
+</div>
+
+<div class="card-custom p-4">
+    <div id="staffList"><div class="loading-spinner"></div></div>
+</div>
+
+<!-- Staff Modal -->
+<div class="modal fade" id="staffModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title fw-bold" id="staffModalTitle">Add Staff</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="staffEditId">
+                <div class="mb-3"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="staffUsername"></div>
+                <div class="mb-3"><label class="form-label fw-bold">First Name</label><input type="text" class="form-control" id="staffFirst"></div>
+                <div class="mb-3"><label class="form-label fw-bold">Last Name</label><input type="text" class="form-control" id="staffLast"></div>
+                <div class="mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="staffEmail"></div>
+                <div class="mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="staffPhone"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Role</label>
+                    <select class="form-select" id="staffRole">
+                        <option value="manager">Manager</option>
+                        <option value="staff">Staff</option>
+                        <option value="kitchen">Kitchen Staff</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="passwordFields">
+                    <label class="form-label fw-bold">Password</label>
+                    <input type="password" class="form-control" id="staffPassword">
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary-custom" onclick="saveStaff()">Save</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const roleLabels = { manager: 'Manager', staff: 'Staff', kitchen: 'Kitchen Staff', restaurant_owner: 'Owner' };
+const roleBadgeColors = { manager: 'primary', staff: 'info', kitchen: 'warning', restaurant_owner: 'success' };
+
+async function loadStaff() {
+    try {
+        const data = await api.get('/staff/');
+        const list = data.results || data;
+        const container = document.getElementById('staffList');
+        if (list.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No staff members yet</p></div>';
+            return;
+        }
+        container.innerHTML = `<div class="table-responsive"><table class="table table-hover align-middle">
+            <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${list.map(s => `<tr>
+                <td class="fw-bold">${s.first_name} ${s.last_name}</td>
+                <td>${s.username}</td>
+                <td>${s.email || '-'}</td>
+                <td>${s.phone || '-'}</td>
+                <td><span class="badge bg-${roleBadgeColors[s.role] || 'secondary'}">${roleLabels[s.role] || s.role}</span></td>
+                <td>${s.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-custom" onclick="editStaff(${JSON.stringify(s).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteStaff(${s.id})"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } catch (e) { showToast('Could not load staff', 'danger'); }
+}
+
+function showStaffForm() {
+    document.getElementById('staffEditId').value = '';
+    document.getElementById('staffUsername').value = '';
+    document.getElementById('staffFirst').value = '';
+    document.getElementById('staffLast').value = '';
+    document.getElementById('staffEmail').value = '';
+    document.getElementById('staffPhone').value = '';
+    document.getElementById('staffRole').value = 'staff';
+    document.getElementById('staffPassword').value = '';
+    document.getElementById('passwordFields').style.display = 'block';
+    document.getElementById('staffUsername').disabled = false;
+    document.getElementById('staffModalTitle').textContent = 'Add Staff';
+    new bootstrap.Modal(document.getElementById('staffModal')).show();
+}
+
+function editStaff(s) {
+    document.getElementById('staffEditId').value = s.id;
+    document.getElementById('staffUsername').value = s.username;
+    document.getElementById('staffFirst').value = s.first_name;
+    document.getElementById('staffLast').value = s.last_name;
+    document.getElementById('staffEmail').value = s.email || '';
+    document.getElementById('staffPhone').value = s.phone || '';
+    document.getElementById('staffRole').value = s.role;
+    document.getElementById('staffPassword').value = '';
+    document.getElementById('passwordFields').style.display = 'none';
+    document.getElementById('staffUsername').disabled = true;
+    document.getElementById('staffModalTitle').textContent = 'Edit Staff';
+    new bootstrap.Modal(document.getElementById('staffModal')).show();
+}
+
+async function saveStaff() {
+    const editId = document.getElementById('staffEditId').value;
+    const data = {
+        first_name: document.getElementById('staffFirst').value,
+        last_name: document.getElementById('staffLast').value,
+        email: document.getElementById('staffEmail').value,
+        phone: document.getElementById('staffPhone').value,
+        role: document.getElementById('staffRole').value,
+    };
+    try {
+        if (editId) {
+            await api.patch(`/staff/${editId}/`, data);
+            showToast('Staff updated!', 'success');
+        } else {
+            data.username = document.getElementById('staffUsername').value;
+            data.password = document.getElementById('staffPassword').value;
+            if (!data.username || !data.password) { showToast('Username and password are required', 'danger'); return; }
+            await api.post('/staff/', data);
+            showToast('Staff added!', 'success');
+        }
+        bootstrap.Modal.getInstance(document.getElementById('staffModal')).hide();
+        loadStaff();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteStaff(id) {
+    if (!confirm('Remove this staff member?')) return;
+    try { await api.delete(`/staff/${id}/`); showToast('Staff removed', 'success'); loadStaff(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadStaff();
+</script>
+{% endblock %}

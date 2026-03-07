@@ -1,0 +1,126 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_tables %}active{% endblock %}
+{% block page_title %}Tables & QR Codes{% endblock %}
+{% block page_subtitle %}Manage tables and generate QR codes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div></div>
+    <button class="btn btn-primary-custom" onclick="showAddTable()"><i class="fas fa-plus me-2"></i>Add Table</button>
+</div>
+
+<div class="row g-3" id="tablesGrid"><div class="col-12"><div class="loading-spinner"></div></div></div>
+
+<!-- Add/Edit Table Modal -->
+<div class="modal fade" id="tableModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="tableModalTitle">Add Table</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tableEditId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Table Number</label>
+                    <input type="number" class="form-control" id="tableNumber">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Name (optional)</label>
+                    <input type="text" class="form-control" id="tableName" placeholder="e.g. VIP Corner">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Capacity</label>
+                    <input type="number" class="form-control" id="tableCapacity" value="4">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary-custom" onclick="saveTable()">Save Table</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Modal -->
+<div class="modal fade" id="qrModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+            <h5 class="fw-bold" id="qrTitle">Table QR Code</h5>
+            <img id="qrImage" src="" alt="QR Code" class="img-fluid my-3" style="max-width:250px;margin:0 auto;">
+            <a id="qrDownload" href="" download class="btn btn-primary-custom"><i class="fas fa-download me-2"></i>Download QR</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadTables() {
+    try {
+        const data = await api.get('/restaurant/tables/');
+        const tables = data.results || data;
+        const grid = document.getElementById('tablesGrid');
+        if (tables.length === 0) { grid.innerHTML = '<div class="col-12"><div class="empty-state"><i class="fas fa-chair"></i><p>No tables yet. Add your first table!</p></div></div>'; return; }
+        grid.innerHTML = tables.map(t => `
+            <div class="col-md-3 col-6">
+                <div class="table-card status-${t.status}">
+                    <div class="table-number">${t.number}</div>
+                    <div class="mb-1">${t.name || ''}</div>
+                    <div class="mb-2"><i class="fas fa-users text-muted"></i> ${t.capacity} seats</div>
+                    <span class="table-status bg-${t.status === 'available' ? 'success' : t.status === 'occupied' ? 'danger' : 'warning'} text-white">${t.status}</span>
+                    <div class="mt-3 d-flex justify-content-center gap-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showQR(${t.id}, '${t.qr_code_url || ''}', ${t.number})" title="View QR"><i class="fas fa-qrcode"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="regenerateQR(${t.id})" title="Regenerate QR"><i class="fas fa-sync-alt"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteTable(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            </div>`).join('');
+    } catch (e) { showToast('Could not load tables', 'danger'); }
+}
+
+function showAddTable() {
+    document.getElementById('tableModalTitle').textContent = 'Add Table';
+    document.getElementById('tableEditId').value = '';
+    document.getElementById('tableNumber').value = '';
+    document.getElementById('tableName').value = '';
+    document.getElementById('tableCapacity').value = '4';
+    new bootstrap.Modal(document.getElementById('tableModal')).show();
+}
+
+async function saveTable() {
+    const data = {
+        number: parseInt(document.getElementById('tableNumber').value),
+        name: document.getElementById('tableName').value,
+        capacity: parseInt(document.getElementById('tableCapacity').value),
+    };
+    try {
+        await api.post('/restaurant/tables/', data);
+        showToast('Table added with QR code!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('tableModal')).hide();
+        loadTables();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+function showQR(id, url, number) {
+    if (!url) { showToast('No QR code generated yet. Click regenerate.', 'warning'); return; }
+    document.getElementById('qrTitle').textContent = `Table ${number} — QR Code`;
+    document.getElementById('qrImage').src = url;
+    document.getElementById('qrDownload').href = url;
+    new bootstrap.Modal(document.getElementById('qrModal')).show();
+}
+
+async function regenerateQR(id) {
+    try { await api.post(`/restaurant/tables/${id}/regenerate-qr/`); showToast('QR regenerated!', 'success'); loadTables(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteTable(id) {
+    if (!confirm('Delete this table?')) return;
+    try { await api.delete(`/restaurant/tables/${id}/`); showToast('Table deleted', 'success'); loadTables(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadTables();
+</script>
+{% endblock %}

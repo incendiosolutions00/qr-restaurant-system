@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Order Tracking{% endblock %}
+
+{% block body %}
+<div style="max-width:500px;margin:0 auto;padding:20px;">
+    <!-- Header -->
+    <div class="text-center mb-4">
+        <a href="javascript:history.back()" class="text-decoration-none text-muted"><i class="fas fa-arrow-left me-2"></i>Back to Menu</a>
+    </div>
+
+    <div class="card-custom p-4 text-center mb-4" id="orderCard">
+        <div class="loading-spinner" id="loadingSpinner"></div>
+        <div id="orderContent" style="display:none;">
+            <h6 class="text-muted">ORDER NUMBER</h6>
+            <h2 class="fw-bold" style="color:var(--primary);" id="orderNumber"></h2>
+            <p class="text-muted mb-0">Table <strong id="tableNum">-</strong></p>
+        </div>
+    </div>
+
+    <!-- Status Timeline -->
+    <div class="card-custom p-4 mb-4" id="timelineCard" style="display:none;">
+        <h6 class="fw-bold mb-3">Order Progress</h6>
+        <div class="status-timeline" id="statusTimeline"></div>
+    </div>
+
+    <!-- Order Items -->
+    <div class="card-custom p-4 mb-4" id="itemsCard" style="display:none;">
+        <h6 class="fw-bold mb-3">Order Items</h6>
+        <div id="orderItems"></div>
+    </div>
+
+    <!-- Order Total -->
+    <div class="card-custom p-4 mb-4" id="totalCard" style="display:none;">
+        <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span id="subtotal"></span></div>
+        <div class="d-flex justify-content-between mb-1 text-muted"><span>Tax</span><span id="tax"></span></div>
+        <div class="d-flex justify-content-between mb-1 text-muted"><span>Service Charge</span><span id="service"></span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span style="color:var(--primary)" id="total"></span></div>
+    </div>
+
+    <!-- Call Waiter -->
+    <button class="btn btn-outline-custom w-100 mb-5" onclick="callWaiter()">
+        <i class="fas fa-bell me-2"></i>Call Waiter
+    </button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const pathParts = window.location.pathname.split('/');
+const SLUG = pathParts[2];
+const ORDER_NUM = pathParts[4];
+
+const STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'completed'];
+const STATUS_ICONS = {
+    pending: 'fas fa-clock', confirmed: 'fas fa-check',
+    preparing: 'fas fa-fire', ready: 'fas fa-bell',
+    served: 'fas fa-utensils', completed: 'fas fa-flag-checkered',
+};
+const STATUS_LABELS = {
+    pending: 'Pending', confirmed: 'Confirmed',
+    preparing: 'Preparing', ready: 'Ready',
+    served: 'Served', completed: 'Completed',
+};
+
+async function loadOrder() {
+    try {
+        const order = await api.publicGet(`/r/${SLUG}/orders/${ORDER_NUM}/status/`);
+
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('orderContent').style.display = 'block';
+        document.getElementById('timelineCard').style.display = 'block';
+        document.getElementById('itemsCard').style.display = 'block';
+        document.getElementById('totalCard').style.display = 'block';
+
+        document.getElementById('orderNumber').textContent = `#${order.order_number}`;
+        document.getElementById('tableNum').textContent = order.table_number || '-';
+
+        // Timeline
+        const currentIdx = STATUSES.indexOf(order.status);
+        document.getElementById('statusTimeline').innerHTML = STATUSES.map((s, i) => `
+            <div class="timeline-step ${i < currentIdx ? 'completed' : ''} ${i === currentIdx ? 'active' : ''}">
+                <div class="timeline-dot"><i class="${STATUS_ICONS[s]}"></i></div>
+                <div class="timeline-label">${STATUS_LABELS[s]}</div>
+            </div>`).join('');
+
+        // Items
+        document.getElementById('orderItems').innerHTML = (order.items || []).map(item => `
+            <div class="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                <div>
+                    <span class="fw-bold">${item.menu_item_name}</span>
+                    ${item.variant_name ? `<small class="text-muted d-block">${item.variant_name}</small>` : ''}
+                    <small class="text-muted">× ${item.quantity}</small>
+                </div>
+                <span class="fw-bold">${formatPrice(item.subtotal)}</span>
+            </div>`).join('');
+
+        // Totals
+        document.getElementById('subtotal').textContent = formatPrice(order.subtotal);
+        document.getElementById('tax').textContent = formatPrice(order.tax_amount);
+        document.getElementById('service').textContent = formatPrice(order.service_charge);
+        document.getElementById('total').textContent = formatPrice(order.total);
+
+    } catch (e) {
+        document.getElementById('loadingSpinner').innerHTML = `
+            <div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Order not found</p></div>`;
+    }
+}
+
+async function callWaiter() {
+    try {
+        const tableInfo = await api.publicGet(`/r/${SLUG}/table/${pathParts[4]}/`);
+        await api.publicPost(`/r/${SLUG}/waiter-call/`, {
+            table_id: tableInfo?.table?.id,
+            note: 'Customer needs assistance',
+        });
+        showToast('Waiter has been called!', 'success');
+    } catch (e) {
+        showToast(e.message || 'Could not call waiter', 'warning');
+    }
+}
+
+loadOrder();
+// Auto refresh every 15 seconds
+setInterval(loadOrder, 15000);
+</script>
+{% endblock %}

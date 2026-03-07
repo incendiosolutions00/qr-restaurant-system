@@ -1,0 +1,430 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Restaurants — Super Admin{% endblock %}
+
+{% block body %}
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <h4><i class="fas fa-shield-alt me-2"></i>Super Admin</h4>
+        <small>Platform Control Panel</small>
+    </div>
+    <nav>
+        <div class="sidebar-section">Overview</div>
+        <a href="/superadmin/" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <div class="sidebar-section">Management</div>
+        <a href="/superadmin/restaurants/" class="nav-link active"><i class="fas fa-store"></i> Restaurants</a>
+        <a href="/superadmin/users/" class="nav-link"><i class="fas fa-users"></i> Users</a>
+        <a href="/superadmin/plans/" class="nav-link"><i class="fas fa-crown"></i> Plans</a>
+        <div class="sidebar-section">Reports</div>
+        <a href="/superadmin/orders-revenue/" class="nav-link"><i class="fas fa-chart-bar"></i> Orders & Revenue</a>
+        <div class="sidebar-section">Account</div>
+        <a href="#" class="nav-link" onclick="api.logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="top-bar">
+        <div>
+            <h4 class="fw-bold mb-0">Restaurants</h4>
+            <small class="text-muted">Manage all restaurants on the platform</small>
+        </div>
+        <button class="btn btn-primary-custom" onclick="showAddForm()"><i class="fas fa-plus me-2"></i>Add Restaurant</button>
+    </div>
+
+    <!-- Filter Tabs -->
+    <ul class="nav nav-pills mb-3" id="filterTabs">
+        <li class="nav-item"><button class="nav-link active" onclick="setFilter('all')">All Restaurants</button></li>
+        <li class="nav-item"><button class="nav-link" onclick="setFilter('active')">Active</button></li>
+        <li class="nav-item"><button class="nav-link" onclick="setFilter('inactive')">Inactive</button></li>
+        <li class="nav-item"><button class="nav-link" onclick="setFilter('pending')">Pending Approval</button></li>
+    </ul>
+
+    <div class="card-custom p-4">
+        <div id="restaurantsList"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+
+<!-- Add Restaurant Modal -->
+<div class="modal fade" id="addRestaurantModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title fw-bold">Add Restaurant</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <h6 class="fw-bold mb-3"><i class="fas fa-user me-2 text-muted"></i>Owner Account</h6>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="ownerUsername" placeholder="owner_login"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Password</label><input type="password" class="form-control" id="ownerPassword"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="ownerEmail"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">First Name</label><input type="text" class="form-control" id="ownerFirst"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Last Name</label><input type="text" class="form-control" id="ownerLast"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="ownerPhone"></div>
+                </div>
+
+                <hr>
+                <h6 class="fw-bold mb-3"><i class="fas fa-store me-2 text-muted"></i>Restaurant Details</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Restaurant Name</label><input type="text" class="form-control" id="restName"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Slug (URL)</label><input type="text" class="form-control" id="restSlug" placeholder="my-restaurant"></div>
+                </div>
+                <div class="mb-3"><label class="form-label fw-bold">Description</label><textarea class="form-control" id="restDesc" rows="2"></textarea></div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Address</label><input type="text" class="form-control" id="restAddress"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label fw-bold">City</label><input type="text" class="form-control" id="restCity" value="Lahore"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="restPhone"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="restEmail"></div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold"><i class="fas fa-crown me-1 text-warning"></i>Subscription Plan</label>
+                        <select class="form-select" id="restPlan">
+                            <option value="">-- No Plan --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary-custom" onclick="createRestaurant()"><i class="fas fa-plus me-2"></i>Create Restaurant</button></div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Restaurant Modal -->
+<div class="modal fade" id="editRestaurantModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title fw-bold">Edit Restaurant</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+
+                <!-- Owner Account Section -->
+                <h6 class="fw-bold mb-3"><i class="fas fa-user me-2 text-muted"></i>Owner Account</h6>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="editOwnerUsername"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="editOwnerEmail"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="editOwnerPhone"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">First Name</label><input type="text" class="form-control" id="editOwnerFirst"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Last Name</label><input type="text" class="form-control" id="editOwnerLast"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">New Password</label><input type="password" class="form-control" id="editOwnerPassword" placeholder="Leave blank to keep current"></div>
+                </div>
+
+                <hr>
+                <!-- Restaurant Details Section -->
+                <h6 class="fw-bold mb-3"><i class="fas fa-store me-2 text-muted"></i>Restaurant Details</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Restaurant Name</label><input type="text" class="form-control" id="editName"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Slug (URL)</label><input type="text" class="form-control" id="editSlug" disabled></div>
+                </div>
+                <div class="mb-3"><label class="form-label fw-bold">Description</label><textarea class="form-control" id="editDesc" rows="2"></textarea></div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Address</label><input type="text" class="form-control" id="editAddress"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label fw-bold">City</label><input type="text" class="form-control" id="editCity"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="editPhone"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="editEmail"></div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold">Active</label>
+                        <select class="form-select" id="editActive">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold">Approved</label>
+                        <select class="form-select" id="editApproved">
+                            <option value="true">Approved</option>
+                            <option value="false">Pending</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+                <!-- Subscription Plan Section -->
+                <h6 class="fw-bold mb-3"><i class="fas fa-crown me-2 text-warning"></i>Subscription Plan</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Plan</label>
+                        <select class="form-select" id="editPlan"></select>
+                    </div>
+                    <div class="col-md-6 mb-3" id="editSubStatusGroup">
+                        <label class="form-label fw-bold">Subscription Status</label>
+                        <select class="form-select" id="editSubStatus">
+                            <option value="active">Active</option>
+                            <option value="trial">Trial</option>
+                            <option value="past_due">Past Due</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="expired">Expired</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary-custom" onclick="saveRestaurant()"><i class="fas fa-save me-2"></i>Save Changes</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+if (!api.isLoggedIn()) window.location.href = '/admin-panel/login/';
+
+let plans = [];
+let allRestaurants = [];
+let currentFilter = 'all';
+
+async function loadPlans() {
+    try {
+        const data = await api.get('/superadmin/plans/');
+        plans = data.results || data;
+    } catch { plans = []; }
+}
+
+function populatePlanDropdown(selectId, selectedPlanId) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">-- No Plan --</option>' +
+        plans.map(p => `<option value="${p.id}" ${p.id == selectedPlanId ? 'selected' : ''}>${p.name} — Rs.${p.price}/${p.billing_cycle} (${p.max_tables} tables, ${p.max_menu_items} items)</option>`).join('');
+}
+
+function setFilter(filter) {
+    currentFilter = filter;
+    // Update active tab
+    document.querySelectorAll('#filterTabs .nav-link').forEach(btn => btn.classList.remove('active'));
+    const labels = { all: 'All Restaurants', active: 'Active', inactive: 'Inactive', pending: 'Pending Approval' };
+    document.querySelectorAll('#filterTabs .nav-link').forEach(btn => {
+        if (btn.textContent === labels[filter]) btn.classList.add('active');
+    });
+    renderRestaurants();
+}
+
+function renderRestaurants() {
+    let list = allRestaurants;
+    if (currentFilter === 'active') list = list.filter(r => r.is_active && r.is_approved);
+    else if (currentFilter === 'inactive') list = list.filter(r => !r.is_active);
+    else if (currentFilter === 'pending') list = list.filter(r => !r.is_approved);
+
+    const countText = `Showing ${list.length} of ${allRestaurants.length} restaurants`;
+
+    document.getElementById('restaurantsList').innerHTML = list.length === 0
+        ? '<div class="empty-state"><i class="fas fa-store"></i><p>No restaurants found for this filter</p></div>'
+        : `<p class="text-muted small mb-3">${countText}</p>
+            <div class="table-responsive"><table class="table table-hover align-middle">
+            <thead><tr><th>Restaurant</th><th>Owner</th><th>City</th><th>Plan</th><th>Tables</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${list.map(r => `<tr>
+                <td><strong>${r.name}</strong><br><small class="text-muted">${r.slug}</small></td>
+                <td><strong>${r.owner_name || '-'}</strong><br><small class="text-muted">${r.owner_username || ''}</small></td>
+                <td>${r.city}</td>
+                <td>${r.plan_name ? `<span class="badge bg-info">${r.plan_name}</span>` : '<span class="text-muted">No Plan</span>'}</td>
+                <td>${r.table_count || 0}</td>
+                <td>
+                    ${r.is_approved ? '<span class="badge bg-success">Approved</span>' : '<span class="badge bg-warning text-dark">Pending</span>'}
+                    ${r.is_active ? '' : '<span class="badge bg-danger ms-1">Inactive</span>'}
+                </td>
+                <td class="text-nowrap">
+                    ${!r.is_approved ? `<button class="btn btn-sm btn-success me-1" onclick="approveRestaurant(${r.id})" title="Approve"><i class="fas fa-check"></i></button>` : ''}
+                    <button class="btn btn-sm btn-outline-custom me-1" onclick='editRestaurant(${JSON.stringify(r).replace(/'/g, "&#39;")})' title="Edit"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRestaurant(${r.id}, '${r.name.replace(/'/g, "\\'")}')" title="Delete"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function loadRestaurants() {
+    try {
+        const data = await api.get('/superadmin/restaurants/');
+        const list = data.results || data;
+        allRestaurants = list;
+        renderRestaurants();
+    } catch (e) { showToast('Could not load restaurants', 'danger'); }
+}
+
+function showAddForm() {
+    document.getElementById('ownerUsername').value = '';
+    document.getElementById('ownerPassword').value = '';
+    document.getElementById('ownerEmail').value = '';
+    document.getElementById('ownerFirst').value = '';
+    document.getElementById('ownerLast').value = '';
+    document.getElementById('ownerPhone').value = '';
+    document.getElementById('restName').value = '';
+    document.getElementById('restSlug').value = '';
+    document.getElementById('restDesc').value = '';
+    document.getElementById('restAddress').value = '';
+    document.getElementById('restCity').value = 'Lahore';
+    document.getElementById('restPhone').value = '';
+    document.getElementById('restEmail').value = '';
+    populatePlanDropdown('restPlan', null);
+
+    document.getElementById('restName').oninput = function() {
+        document.getElementById('restSlug').value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    };
+    new bootstrap.Modal(document.getElementById('addRestaurantModal')).show();
+}
+
+async function createRestaurant() {
+    const data = {
+        owner_username: document.getElementById('ownerUsername').value,
+        owner_password: document.getElementById('ownerPassword').value,
+        owner_email: document.getElementById('ownerEmail').value,
+        owner_first_name: document.getElementById('ownerFirst').value,
+        owner_last_name: document.getElementById('ownerLast').value,
+        owner_phone: document.getElementById('ownerPhone').value,
+        name: document.getElementById('restName').value,
+        slug: document.getElementById('restSlug').value,
+        description: document.getElementById('restDesc').value,
+        address: document.getElementById('restAddress').value,
+        city: document.getElementById('restCity').value,
+        phone: document.getElementById('restPhone').value,
+        email: document.getElementById('restEmail').value,
+        plan_id: document.getElementById('restPlan').value || null,
+    };
+
+    if (!data.owner_username || !data.owner_password) { showToast('Owner username & password are required', 'danger'); return; }
+    if (!data.name || !data.slug) { showToast('Restaurant name & slug are required', 'danger'); return; }
+
+    try {
+        await api.post('/superadmin/restaurants/create/', data);
+        showToast('Restaurant created & approved!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addRestaurantModal')).hide();
+        loadRestaurants();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+let editSubId = null; // track existing subscription id
+
+function editRestaurant(r) {
+    document.getElementById('editId').value = r.id;
+
+    // Owner fields
+    document.getElementById('editOwnerUsername').value = r.owner_username || '';
+    document.getElementById('editOwnerEmail').value = r.owner_email || '';
+    document.getElementById('editOwnerPhone').value = r.owner_phone || '';
+    document.getElementById('editOwnerFirst').value = r.owner_first_name || '';
+    document.getElementById('editOwnerLast').value = r.owner_last_name || '';
+    document.getElementById('editOwnerPassword').value = '';
+
+    // Restaurant fields
+    document.getElementById('editName').value = r.name;
+    document.getElementById('editSlug').value = r.slug;
+    document.getElementById('editDesc').value = r.description || '';
+    document.getElementById('editAddress').value = r.address || '';
+    document.getElementById('editCity').value = r.city || '';
+    document.getElementById('editPhone').value = r.phone || '';
+    document.getElementById('editEmail').value = r.email || '';
+    document.getElementById('editActive').value = r.is_active ? 'true' : 'false';
+    document.getElementById('editApproved').value = r.is_approved ? 'true' : 'false';
+
+    populatePlanDropdown('editPlan', r.plan_id);
+    document.getElementById('editSubStatus').value = r.subscription_status || 'active';
+    editSubId = r.plan_id ? 'exists' : null;
+
+    // Load subscription ID if exists
+    loadSubscriptionId(r.id);
+
+    new bootstrap.Modal(document.getElementById('editRestaurantModal')).show();
+}
+
+async function loadSubscriptionId(restaurantId) {
+    try {
+        const data = await api.get('/superadmin/subscriptions/');
+        const list = data.results || data;
+        const sub = list.find(s => s.restaurant === restaurantId);
+        editSubId = sub ? sub.id : null;
+    } catch { editSubId = null; }
+}
+
+async function saveRestaurant() {
+    const id = document.getElementById('editId').value;
+
+    // Owner data
+    const ownerData = {
+        username: document.getElementById('editOwnerUsername').value,
+        email: document.getElementById('editOwnerEmail').value,
+        first_name: document.getElementById('editOwnerFirst').value,
+        last_name: document.getElementById('editOwnerLast').value,
+        phone: document.getElementById('editOwnerPhone').value,
+    };
+    const newPassword = document.getElementById('editOwnerPassword').value;
+    if (newPassword) ownerData.password = newPassword;
+
+    // Restaurant data
+    const restData = {
+        name: document.getElementById('editName').value,
+        description: document.getElementById('editDesc').value,
+        address: document.getElementById('editAddress').value,
+        city: document.getElementById('editCity').value,
+        phone: document.getElementById('editPhone').value,
+        email: document.getElementById('editEmail').value,
+        is_active: document.getElementById('editActive').value === 'true',
+        is_approved: document.getElementById('editApproved').value === 'true',
+    };
+    const planId = document.getElementById('editPlan').value;
+    const subStatus = document.getElementById('editSubStatus').value;
+
+    try {
+        // 1. Update owner account
+        await api.patch(`/superadmin/restaurants/${id}/update-owner/`, ownerData);
+
+        // 2. Update restaurant info
+        await api.patch(`/superadmin/restaurants/${id}/`, restData);
+
+        // 3. Handle subscription
+        if (planId) {
+            const today = new Date().toISOString().split('T')[0];
+            const endDate = new Date();
+            endDate.setFullYear(endDate.getFullYear() + 1);
+            const end = endDate.toISOString().split('T')[0];
+
+            if (editSubId) {
+                await api.patch(`/superadmin/subscriptions/${editSubId}/`, {
+                    plan: parseInt(planId),
+                    status: subStatus,
+                });
+            } else {
+                await api.post('/superadmin/subscriptions/', {
+                    restaurant: parseInt(id),
+                    plan: parseInt(planId),
+                    status: subStatus,
+                    start_date: today,
+                    end_date: end,
+                });
+            }
+        }
+
+        showToast('Restaurant & owner updated!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('editRestaurantModal')).hide();
+        loadRestaurants();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function approveRestaurant(id) {
+    try {
+        await api.post(`/superadmin/restaurants/${id}/approve/`);
+        showToast('Restaurant approved!', 'success');
+        loadRestaurants();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteRestaurant(id, name) {
+    if (!confirm(`Delete restaurant "${name}"? This cannot be undone.`)) return;
+    try { await api.delete(`/superadmin/restaurants/${id}/`); showToast('Restaurant deleted', 'success'); loadRestaurants(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+// Init — check URL for filter param (from dashboard click)
+const urlFilter = new URLSearchParams(window.location.search).get('filter');
+if (urlFilter && ['all', 'active', 'inactive', 'pending'].includes(urlFilter)) {
+    currentFilter = urlFilter;
+}
+loadPlans().then(() => {
+    loadRestaurants();
+    // Activate the right tab
+    const labels = { all: 'All Restaurants', active: 'Active', inactive: 'Inactive', pending: 'Pending Approval' };
+    document.querySelectorAll('#filterTabs .nav-link').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent === labels[currentFilter]) btn.classList.add('active');
+    });
+});
+</script>
+{% endblock %}

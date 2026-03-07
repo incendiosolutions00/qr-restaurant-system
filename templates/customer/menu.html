@@ -1,0 +1,475 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Menu — Restaurant{% endblock %}
+
+{% block body %}
+<!-- Restaurant Header -->
+<div class="restaurant-header" id="restaurantHeader">
+    <div id="restaurantLogo" class="mb-2"></div>
+    <h1 id="restaurantName">Loading...</h1>
+    <p class="mb-2 opacity-75" id="restaurantAddress"></p>
+    <span id="openBadge"></span>
+    <div class="mt-2">
+        <small class="opacity-50">Table <strong id="tableNumber">-</strong></small>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="px-3 mb-3">
+    <div class="input-group">
+        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+        <input type="text" class="form-control border-start-0" placeholder="Search menu..." id="searchInput">
+    </div>
+</div>
+
+<!-- Deals Carousel -->
+<div id="dealsSection" class="px-3 mb-3" style="display:none;">
+    <h6 class="fw-bold mb-2"><i class="fas fa-fire text-danger"></i> Special Deals</h6>
+    <div class="d-flex gap-3 overflow-auto pb-2" id="dealsContainer" style="scrollbar-width:none;"></div>
+</div>
+
+<!-- Category Tabs -->
+<div class="category-tabs" id="categoryTabs"></div>
+
+<!-- Menu Items -->
+<div class="px-3 pb-5" id="menuContainer">
+    <div class="loading-spinner"></div>
+</div>
+
+<!-- Floating Cart Button -->
+<div class="floating-cart" id="floatingCart" style="display:none;" onclick="openCart()">
+    <div class="d-flex align-items-center gap-2">
+        <div class="cart-count" id="cartCount">0</div>
+        <span class="fw-bold">View Cart</span>
+    </div>
+    <span class="fw-bold" id="cartTotal">Rs.0</span>
+</div>
+
+<!-- Item Detail Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="modalItemName"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" id="modalItemDesc"></p>
+                <p class="fw-bold fs-5" style="color:var(--primary)" id="modalItemPrice"></p>
+
+                <!-- Variants -->
+                <div id="modalVariants" style="display:none;">
+                    <h6 class="fw-bold mb-2">Choose Size</h6>
+                    <div id="variantOptions"></div>
+                </div>
+
+                <!-- Modifiers -->
+                <div id="modalModifiers" style="display:none;" class="mt-3">
+                    <div id="modifierGroups"></div>
+                </div>
+
+                <!-- Quantity -->
+                <div class="d-flex align-items-center gap-3 mt-3">
+                    <h6 class="fw-bold mb-0">Quantity</h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary rounded-circle" onclick="changeQty(-1)" style="width:35px;height:35px;">-</button>
+                        <span class="fw-bold fs-5" id="modalQty">1</span>
+                        <button class="btn btn-sm btn-outline-secondary rounded-circle" onclick="changeQty(1)" style="width:35px;height:35px;">+</button>
+                    </div>
+                </div>
+
+                <!-- Special Instructions -->
+                <div class="mt-3">
+                    <textarea class="form-control" id="modalInstructions" rows="2" placeholder="Special instructions (optional)"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary-custom w-100 py-3 fw-bold" onclick="addToCart()">
+                    Add to Cart — <span id="modalTotal">Rs.0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cart Modal -->
+<div class="modal fade" id="cartModal" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen-sm-down modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="fas fa-shopping-cart me-2"></i>Your Cart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="cartItems"></div>
+            <div class="modal-footer flex-column">
+                <div class="w-100">
+                    <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span id="cartSubtotal">Rs.0</span></div>
+                    <div class="d-flex justify-content-between mb-1 text-muted"><span>Tax</span><span id="cartTax">Rs.0</span></div>
+                    <div class="d-flex justify-content-between mb-1 text-muted"><span>Service Charge</span><span id="cartService">Rs.0</span></div>
+                    <hr>
+                    <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="cartGrandTotal" style="color:var(--primary)">Rs.0</span></div>
+                </div>
+                <div class="w-100 mt-2">
+                    <input type="text" class="form-control mb-2" id="customerName" placeholder="Your Name (optional)">
+                    <input type="text" class="form-control mb-2" id="customerPhone" placeholder="Phone Number (optional)">
+                    <textarea class="form-control mb-3" id="orderInstructions" rows="2" placeholder="Any special instructions for the order?"></textarea>
+                    <button class="btn btn-primary-custom w-100 py-3 fw-bold fs-5" onclick="placeOrder()" id="placeOrderBtn">
+                        <i class="fas fa-check-circle me-2"></i>Place Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+            <div style="font-size:4rem;color:var(--success)"><i class="fas fa-check-circle"></i></div>
+            <h3 class="fw-bold mt-2">Order Placed!</h3>
+            <p class="text-muted">Your order number is</p>
+            <h2 class="fw-bold" style="color:var(--primary)" id="successOrderNumber"></h2>
+            <p class="text-muted">We'll start preparing your food right away.</p>
+            <a id="trackOrderLink" class="btn btn-primary-custom mt-2" href="#">
+                <i class="fas fa-map-marker-alt me-2"></i>Track Order
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ─── State ────────────────────────────────────────────────────────────────
+const pathParts = window.location.pathname.split('/');
+const SLUG = pathParts[2];
+const TABLE_ID = pathParts[4];
+let restaurantData = null;
+let sessionData = null;
+let menuData = [];
+let cart = [];
+let currentItem = null;
+let selectedVariant = null;
+let selectedModifiers = [];
+let modalQty = 1;
+
+// ─── Load Everything ──────────────────────────────────────────────────────
+async function init() {
+    try {
+        // Load table info + session
+        const info = await api.publicGet(`/r/${SLUG}/table/${TABLE_ID}/`);
+        restaurantData = info.restaurant;
+        sessionData = info.session;
+
+        document.getElementById('restaurantName').textContent = restaurantData.name;
+        document.getElementById('restaurantAddress').textContent = `${restaurantData.address}, ${restaurantData.city}`;
+        document.getElementById('tableNumber').textContent = info.table.number;
+        document.getElementById('openBadge').innerHTML = restaurantData.is_open
+            ? '<span class="badge-open">Open Now</span>'
+            : '<span class="badge-closed">Closed</span>';
+
+        // Load menu
+        menuData = await api.publicGet(`/r/${SLUG}/menu/`);
+        renderCategories();
+        renderMenu();
+
+        // Load deals
+        const deals = await api.publicGet(`/r/${SLUG}/deals/`);
+        if (deals.length > 0) renderDeals(deals);
+    } catch (e) {
+        document.getElementById('menuContainer').innerHTML = `
+            <div class="empty-state"><i class="fas fa-exclamation-circle"></i>
+            <p>Could not load menu. Please try again.</p></div>`;
+    }
+}
+
+// ─── Render Categories ────────────────────────────────────────────────────
+function renderCategories() {
+    const tabs = document.getElementById('categoryTabs');
+    tabs.innerHTML = `<div class="category-tab active" onclick="filterCategory(null, this)">All</div>`;
+    menuData.forEach(cat => {
+        tabs.innerHTML += `<div class="category-tab" onclick="filterCategory(${cat.id}, this)">${cat.name}</div>`;
+    });
+}
+
+function filterCategory(catId, el) {
+    document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderMenu(catId);
+}
+
+// ─── Render Menu Items ────────────────────────────────────────────────────
+function renderMenu(categoryId = null) {
+    const container = document.getElementById('menuContainer');
+    let html = '';
+    const search = document.getElementById('searchInput').value.toLowerCase();
+
+    menuData.forEach(cat => {
+        if (categoryId && cat.id !== categoryId) return;
+        const items = cat.items.filter(i => i.is_available && (!search || i.name.toLowerCase().includes(search)));
+        if (items.length === 0) return;
+
+        html += `<h6 class="fw-bold mt-3 mb-2 text-muted text-uppercase" style="font-size:0.8rem;letter-spacing:1px;">${cat.name}</h6>`;
+        items.forEach((item, idx) => {
+            html += `
+            <div class="menu-item-card animate-fade-in" style="animation-delay:${idx * 0.05}s" onclick="openItemModal(${cat.id}, ${item.id})">
+                <div class="item-image">
+                    ${item.image ? `<img src="${item.image}" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">` : '<i class="fas fa-utensils"></i>'}
+                </div>
+                <div class="item-info">
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-desc">${item.description || ''}</div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="item-price">${formatPrice(item.price)}</span>
+                        <span class="item-prep"><i class="far fa-clock"></i> ${item.prep_time}min</span>
+                    </div>
+                </div>
+                <div class="add-btn">
+                    <button class="btn btn-sm btn-primary-custom rounded-circle" style="width:36px;height:36px;" onclick="event.stopPropagation();quickAdd(${cat.id},${item.id})">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>`;
+        });
+    });
+
+    container.innerHTML = html || '<div class="empty-state"><i class="fas fa-search"></i><p>No items found</p></div>';
+}
+
+// ─── Deals ────────────────────────────────────────────────────────────────
+function renderDeals(deals) {
+    document.getElementById('dealsSection').style.display = 'block';
+    const c = document.getElementById('dealsContainer');
+    c.innerHTML = deals.map(d => `
+        <div class="deal-card">
+            <div class="deal-name">${d.name}</div>
+            <p style="font-size:0.8rem;opacity:0.85;margin:4px 0;">${d.description || ''}</p>
+            <div class="deal-price">${d.discount_type === 'fixed_price' ? formatPrice(d.discount_value) : d.discount_value + '% OFF'}</div>
+        </div>`).join('');
+}
+
+// ─── Item Modal ───────────────────────────────────────────────────────────
+function findItem(catId, itemId) {
+    const cat = menuData.find(c => c.id === catId);
+    return cat ? cat.items.find(i => i.id === itemId) : null;
+}
+
+function openItemModal(catId, itemId) {
+    currentItem = findItem(catId, itemId);
+    if (!currentItem) return;
+
+    selectedVariant = null;
+    selectedModifiers = [];
+    modalQty = 1;
+
+    document.getElementById('modalItemName').textContent = currentItem.name;
+    document.getElementById('modalItemDesc').textContent = currentItem.description || '';
+    document.getElementById('modalItemPrice').textContent = formatPrice(currentItem.price);
+    document.getElementById('modalQty').textContent = 1;
+    document.getElementById('modalInstructions').value = '';
+
+    // Variants
+    const varDiv = document.getElementById('modalVariants');
+    const varOpts = document.getElementById('variantOptions');
+    if (currentItem.variants && currentItem.variants.length > 0) {
+        varDiv.style.display = 'block';
+        varOpts.innerHTML = currentItem.variants.filter(v => v.is_available).map(v => `
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="variant" id="var${v.id}" value="${v.id}" onchange="selectVariant(${v.id})">
+                <label class="form-check-label d-flex justify-content-between w-100" for="var${v.id}">
+                    <span>${v.name}</span><strong>${formatPrice(v.total_price)}</strong>
+                </label>
+            </div>`).join('');
+    } else {
+        varDiv.style.display = 'none';
+    }
+
+    // Modifiers
+    const modDiv = document.getElementById('modalModifiers');
+    const modGroups = document.getElementById('modifierGroups');
+    if (currentItem.modifier_groups && currentItem.modifier_groups.length > 0) {
+        modDiv.style.display = 'block';
+        modGroups.innerHTML = currentItem.modifier_groups.map(g => `
+            <div class="mb-3">
+                <h6 class="fw-bold">${g.name} ${g.is_required ? '<span class="text-danger">*</span>' : ''}</h6>
+                ${g.modifiers.filter(m => m.is_available).map(m => `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="mod${m.id}" value="${m.id}" data-price="${m.price}" onchange="toggleModifier(${m.id}, ${m.price})">
+                        <label class="form-check-label d-flex justify-content-between w-100" for="mod${m.id}">
+                            <span>${m.name}</span>${m.price > 0 ? `<span class="text-muted">+${formatPrice(m.price)}</span>` : ''}
+                        </label>
+                    </div>`).join('')}
+            </div>`).join('');
+    } else {
+        modDiv.style.display = 'none';
+    }
+
+    updateModalTotal();
+    new bootstrap.Modal(document.getElementById('itemModal')).show();
+}
+
+function selectVariant(id) {
+    selectedVariant = currentItem.variants.find(v => v.id === id);
+    updateModalTotal();
+}
+
+function toggleModifier(id, price) {
+    const idx = selectedModifiers.findIndex(m => m.id === id);
+    if (idx >= 0) selectedModifiers.splice(idx, 1);
+    else selectedModifiers.push({ id, price });
+    updateModalTotal();
+}
+
+function changeQty(delta) {
+    modalQty = Math.max(1, modalQty + delta);
+    document.getElementById('modalQty').textContent = modalQty;
+    updateModalTotal();
+}
+
+function updateModalTotal() {
+    let price = selectedVariant ? parseFloat(selectedVariant.total_price) : parseFloat(currentItem.price);
+    price += selectedModifiers.reduce((sum, m) => sum + parseFloat(m.price), 0);
+    document.getElementById('modalTotal').textContent = formatPrice(price * modalQty);
+}
+
+// ─── Cart Functions ───────────────────────────────────────────────────────
+function quickAdd(catId, itemId) {
+    currentItem = findItem(catId, itemId);
+    selectedVariant = null;
+    selectedModifiers = [];
+    modalQty = 1;
+    addToCart();
+}
+
+function addToCart() {
+    const price = selectedVariant ? parseFloat(selectedVariant.total_price) : parseFloat(currentItem.price);
+    const modTotal = selectedModifiers.reduce((s, m) => s + parseFloat(m.price), 0);
+
+    cart.push({
+        menu_item_id: currentItem.id,
+        name: currentItem.name,
+        variant_id: selectedVariant ? selectedVariant.id : null,
+        variant_name: selectedVariant ? selectedVariant.name : null,
+        quantity: modalQty,
+        unit_price: price + modTotal,
+        modifier_ids: selectedModifiers.map(m => m.id),
+        modifier_names: selectedModifiers.map(m => m.name || ''),
+        special_instructions: document.getElementById('modalInstructions')?.value || '',
+    });
+
+    updateCartUI();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
+    if (modal) modal.hide();
+    showToast(`${currentItem.name} added to cart!`, 'success');
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    updateCartUI();
+    renderCartItems();
+}
+
+function updateCartUI() {
+    const count = cart.reduce((s, i) => s + i.quantity, 0);
+    const total = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    document.getElementById('cartCount').textContent = count;
+    document.getElementById('cartTotal').textContent = formatPrice(total);
+    document.getElementById('floatingCart').style.display = count > 0 ? 'flex' : 'none';
+}
+
+function openCart() {
+    renderCartItems();
+    new bootstrap.Modal(document.getElementById('cartModal')).show();
+}
+
+function renderCartItems() {
+    const container = document.getElementById('cartItems');
+    if (cart.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-shopping-cart"></i><p>Cart is empty</p></div>';
+        return;
+    }
+
+    const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    const taxRate = restaurantData ? parseFloat(restaurantData.tax_rate) : 0;
+    const serviceRate = restaurantData ? parseFloat(restaurantData.service_charge_rate) : 0;
+    const tax = subtotal * (taxRate / 100);
+    const service = subtotal * (serviceRate / 100);
+
+    container.innerHTML = cart.map((item, idx) => `
+        <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
+            <div>
+                <div class="fw-bold">${item.name}</div>
+                ${item.variant_name ? `<small class="text-muted">${item.variant_name}</small><br>` : ''}
+                ${item.modifier_names.length ? `<small class="text-muted">${item.modifier_names.join(', ')}</small><br>` : ''}
+                ${item.special_instructions ? `<small class="text-info"><i class="fas fa-comment"></i> ${item.special_instructions}</small>` : ''}
+                <div class="mt-1"><strong>${formatPrice(item.unit_price)} × ${item.quantity}</strong></div>
+            </div>
+            <div class="text-end">
+                <div class="fw-bold mb-1">${formatPrice(item.unit_price * item.quantity)}</div>
+                <button class="btn btn-sm btn-outline-danger rounded-circle" onclick="removeFromCart(${idx})" style="width:30px;height:30px;padding:0;">
+                    <i class="fas fa-trash" style="font-size:0.7rem;"></i>
+                </button>
+            </div>
+        </div>`).join('');
+
+    document.getElementById('cartSubtotal').textContent = formatPrice(subtotal);
+    document.getElementById('cartTax').textContent = formatPrice(tax);
+    document.getElementById('cartService').textContent = formatPrice(service);
+    document.getElementById('cartGrandTotal').textContent = formatPrice(subtotal + tax + service);
+}
+
+// ─── Place Order ──────────────────────────────────────────────────────────
+async function placeOrder() {
+    if (cart.length === 0) return showToast('Cart is empty!', 'warning');
+
+    const btn = document.getElementById('placeOrderBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Placing Order...';
+
+    try {
+        const orderData = {
+            table_id: parseInt(TABLE_ID),
+            session_id: sessionData?.session_id,
+            customer_name: document.getElementById('customerName').value,
+            customer_phone: document.getElementById('customerPhone').value,
+            special_instructions: document.getElementById('orderInstructions').value,
+            order_type: 'dine_in',
+            items: cart.map(i => ({
+                menu_item_id: i.menu_item_id,
+                variant_id: i.variant_id,
+                quantity: i.quantity,
+                modifier_ids: i.modifier_ids,
+                special_instructions: i.special_instructions,
+            })),
+        };
+
+        const order = await api.publicPost(`/r/${SLUG}/orders/`, orderData);
+
+        // Close cart modal
+        bootstrap.Modal.getInstance(document.getElementById('cartModal')).hide();
+
+        // Show success
+        document.getElementById('successOrderNumber').textContent = `#${order.order_number}`;
+        document.getElementById('trackOrderLink').href = `/r/${SLUG}/order/${order.order_number}/`;
+        new bootstrap.Modal(document.getElementById('successModal')).show();
+
+        // Clear cart
+        cart = [];
+        updateCartUI();
+    } catch (e) {
+        showToast(e.message || 'Failed to place order', 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Place Order';
+    }
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', () => renderMenu());
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+init();
+</script>
+{% endblock %}

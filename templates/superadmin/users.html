@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Users — Super Admin{% endblock %}
+
+{% block body %}
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <h4><i class="fas fa-shield-alt me-2"></i>Super Admin</h4>
+        <small>Platform Control Panel</small>
+    </div>
+    <nav>
+        <div class="sidebar-section">Overview</div>
+        <a href="/superadmin/" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <div class="sidebar-section">Management</div>
+        <a href="/superadmin/restaurants/" class="nav-link"><i class="fas fa-store"></i> Restaurants</a>
+        <a href="/superadmin/users/" class="nav-link active"><i class="fas fa-users"></i> Users</a>
+        <a href="/superadmin/plans/" class="nav-link"><i class="fas fa-crown"></i> Plans</a>
+        <div class="sidebar-section">Reports</div>
+        <a href="/superadmin/orders-revenue/" class="nav-link"><i class="fas fa-chart-bar"></i> Orders & Revenue</a>
+        <div class="sidebar-section">Account</div>
+        <a href="#" class="nav-link" onclick="api.logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="top-bar">
+        <div>
+            <h4 class="fw-bold mb-0">Users</h4>
+            <small class="text-muted">All platform users across restaurants</small>
+        </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2 col-6">
+            <div class="stat-card bg-gradient-blue">
+                <div class="stat-number" id="totalUsers">-</div>
+                <div class="stat-label">Total Users</div>
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="stat-card bg-gradient-purple">
+                <div class="stat-number" id="totalAdmins">-</div>
+                <div class="stat-label">Super Admins</div>
+                <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="stat-card bg-gradient-orange">
+                <div class="stat-number" id="totalOwners">-</div>
+                <div class="stat-label">Owners</div>
+                <div class="stat-icon"><i class="fas fa-user-tie"></i></div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="stat-card bg-gradient-green">
+                <div class="stat-number" id="totalManagers">-</div>
+                <div class="stat-label">Managers</div>
+                <div class="stat-icon"><i class="fas fa-user-cog"></i></div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="stat-card bg-gradient-dark">
+                <div class="stat-number" id="totalStaff">-</div>
+                <div class="stat-label">Staff</div>
+                <div class="stat-icon"><i class="fas fa-user"></i></div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="stat-card" style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;">
+                <div class="stat-number" id="totalKitchen">-</div>
+                <div class="stat-label">Kitchen</div>
+                <div class="stat-icon"><i class="fas fa-utensils"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card-custom p-3 mb-4">
+        <div class="row align-items-end g-3">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Filter by Role</label>
+                <select class="form-select" id="roleFilter" onchange="applyFilters()">
+                    <option value="all">All Roles</option>
+                    <option value="super_admin">Super Admins</option>
+                    <option value="restaurant_owner">Restaurant Owners</option>
+                    <option value="manager">Managers</option>
+                    <option value="staff">Staff</option>
+                    <option value="kitchen">Kitchen Staff</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Filter by Restaurant</label>
+                <select class="form-select" id="restaurantFilter" onchange="applyFilters()">
+                    <option value="all">All Restaurants</option>
+                    <option value="none">No Restaurant (Admins)</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Search</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Username, name, email..." oninput="applyFilters()">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card-custom p-4">
+        <div id="usersTable"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+if (!api.isLoggedIn()) window.location.href = '/admin-panel/login/';
+
+let allUsers = [];
+let restaurants = [];
+
+const roleBadges = {
+    super_admin: '<span class="badge bg-danger">Super Admin</span>',
+    restaurant_owner: '<span class="badge bg-primary">Owner</span>',
+    manager: '<span class="badge bg-info">Manager</span>',
+    staff: '<span class="badge bg-success">Staff</span>',
+    kitchen: '<span class="badge bg-warning text-dark">Kitchen</span>',
+    customer: '<span class="badge bg-secondary">Customer</span>',
+};
+
+async function loadRestaurants() {
+    try {
+        const data = await api.get('/superadmin/restaurants/');
+        restaurants = data.results || data;
+        const sel = document.getElementById('restaurantFilter');
+        restaurants.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+        });
+    } catch {}
+}
+
+async function loadUsers() {
+    try {
+        const data = await api.get('/superadmin/users/');
+        allUsers = data.results || data;
+        updateStats();
+        applyFilters();
+    } catch (e) { showToast('Could not load users', 'danger'); }
+}
+
+function updateStats() {
+    document.getElementById('totalUsers').textContent = allUsers.length;
+    document.getElementById('totalAdmins').textContent = allUsers.filter(u => u.role === 'super_admin').length;
+    document.getElementById('totalOwners').textContent = allUsers.filter(u => u.role === 'restaurant_owner').length;
+    document.getElementById('totalManagers').textContent = allUsers.filter(u => u.role === 'manager').length;
+    document.getElementById('totalStaff').textContent = allUsers.filter(u => u.role === 'staff').length;
+    document.getElementById('totalKitchen').textContent = allUsers.filter(u => u.role === 'kitchen').length;
+}
+
+function applyFilters() {
+    const role = document.getElementById('roleFilter').value;
+    const restaurant = document.getElementById('restaurantFilter').value;
+    const search = document.getElementById('searchInput').value.toLowerCase().trim();
+
+    let filtered = [...allUsers];
+
+    // Role filter
+    if (role !== 'all') {
+        filtered = filtered.filter(u => u.role === role);
+    }
+
+    // Restaurant filter
+    if (restaurant === 'none') {
+        filtered = filtered.filter(u => !u.restaurant);
+    } else if (restaurant !== 'all') {
+        filtered = filtered.filter(u => u.restaurant == restaurant);
+    }
+
+    // Search filter
+    if (search) {
+        filtered = filtered.filter(u =>
+            (u.username || '').toLowerCase().includes(search) ||
+            (u.first_name || '').toLowerCase().includes(search) ||
+            (u.last_name || '').toLowerCase().includes(search) ||
+            (u.email || '').toLowerCase().includes(search) ||
+            (u.phone || '').toLowerCase().includes(search)
+        );
+    }
+
+    renderUsers(filtered);
+}
+
+function renderUsers(list) {
+    const container = document.getElementById('usersTable');
+
+    if (list.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No users found matching your filters</p></div>';
+        return;
+    }
+
+    // Group users by restaurant for display
+    container.innerHTML = `
+        <p class="text-muted small mb-3">Showing ${list.length} of ${allUsers.length} users</p>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Restaurant</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${list.map(u => `<tr>
+                        <td>
+                            <strong>${u.first_name || ''} ${u.last_name || ''}</strong>
+                            ${(u.first_name || u.last_name) ? '<br>' : ''}
+                            <small class="text-muted">@${u.username}</small>
+                        </td>
+                        <td><small>${u.email || '<span class="text-muted">—</span>'}</small></td>
+                        <td><small>${u.phone || '<span class="text-muted">—</span>'}</small></td>
+                        <td>${roleBadges[u.role] || `<span class="badge bg-secondary">${u.role}</span>`}</td>
+                        <td>${u.restaurant_name ? `<span class="badge bg-outline-custom" style="border:1px solid var(--primary);color:var(--primary);">${u.restaurant_name}</span>` : '<span class="text-muted">—</span>'}</td>
+                        <td>${u.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+                        <td><small class="text-muted">${formatDate(u.date_joined)}</small></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// Init
+loadRestaurants().then(() => loadUsers());
+</script>
+{% endblock %}

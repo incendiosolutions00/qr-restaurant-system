@@ -1,0 +1,131 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_orders %}active{% endblock %}
+{% block page_title %}Orders{% endblock %}
+{% block page_subtitle %}Manage incoming and active orders{% endblock %}
+
+{% block content %}
+<!-- Filter Tabs -->
+<div class="d-flex gap-2 flex-wrap mb-4">
+    <button class="btn btn-sm btn-primary-custom" onclick="loadOrders('')" id="filterAll">All</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('pending')">Pending</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('confirmed')">Confirmed</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('preparing')">Preparing</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('ready')">Ready</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('served')">Served</button>
+    <button class="btn btn-sm btn-outline-custom" onclick="loadOrders('completed')">Completed</button>
+</div>
+
+<div id="ordersContainer"><div class="loading-spinner"></div></div>
+
+<!-- Order Detail Modal -->
+<div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="orderModalTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="orderModalBody"></div>
+            <div class="modal-footer" id="orderModalFooter"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const STATUS_FLOW = { pending:'confirmed', confirmed:'preparing', preparing:'ready', ready:'served', served:'completed' };
+const STATUS_ACTIONS = { pending:'Confirm', confirmed:'Start Preparing', preparing:'Mark Ready', ready:'Mark Served', served:'Complete' };
+
+async function loadOrders(status = '') {
+    const url = status ? `/restaurant/orders/?status=${status}` : '/restaurant/orders/';
+    try {
+        const data = await api.get(url);
+        const orders = data.results || data;
+        const container = document.getElementById('ordersContainer');
+
+        if (orders.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-receipt"></i><p>No orders found</p></div>';
+            return;
+        }
+
+        container.innerHTML = orders.map(o => `
+            <div class="order-card status-${o.status} animate-fade-in" onclick="viewOrder(${o.id})" style="cursor:pointer;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="fw-bold mb-1">${o.order_number}</h6>
+                        <span class="text-muted">Table ${o.table_number || '-'} · ${o.items ? o.items.length : 0} items</span>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge-status badge-${o.status}">${o.status_display}</span>
+                        <div class="mt-1 fw-bold" style="color:var(--primary);">${formatPrice(o.total)}</div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <small class="text-muted"><i class="far fa-clock"></i> ${formatDate(o.created_at)}</small>
+                    ${o.status !== 'completed' && o.status !== 'cancelled' ? `
+                        <button class="btn btn-sm btn-primary-custom" onclick="event.stopPropagation();updateStatus(${o.id},'${STATUS_FLOW[o.status] || ''}')">
+                            ${STATUS_ACTIONS[o.status] || ''} <i class="fas fa-arrow-right ms-1"></i>
+                        </button>` : ''}
+                </div>
+            </div>`).join('');
+    } catch (e) {
+        showToast('Could not load orders', 'danger');
+    }
+}
+
+async function viewOrder(id) {
+    try {
+        const o = await api.get(`/restaurant/orders/${id}/`);
+        document.getElementById('orderModalTitle').textContent = `Order ${o.order_number}`;
+        document.getElementById('orderModalBody').innerHTML = `
+            <div class="row mb-3">
+                <div class="col-6"><strong>Table:</strong> ${o.table_number || '-'}</div>
+                <div class="col-6"><strong>Type:</strong> ${o.order_type}</div>
+                <div class="col-6"><strong>Customer:</strong> ${o.customer_name || '-'}</div>
+                <div class="col-6"><strong>Phone:</strong> ${o.customer_phone || '-'}</div>
+            </div>
+            <h6 class="fw-bold">Items</h6>
+            ${(o.items || []).map(i => `
+                <div class="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                    <div>
+                        <strong>${i.menu_item_name}</strong> ${i.variant_name ? `(${i.variant_name})` : ''}
+                        <div class="text-muted small">${i.special_instructions || ''}</div>
+                        ${(i.modifiers||[]).map(m => `<span class="badge bg-light text-dark me-1">${m.modifier_name}</span>`).join('')}
+                    </div>
+                    <div class="text-end">
+                        <div>×${i.quantity}</div>
+                        <strong>${formatPrice(i.subtotal)}</strong>
+                    </div>
+                </div>`).join('')}
+            <hr>
+            <div class="d-flex justify-content-between"><span>Subtotal</span><span>${formatPrice(o.subtotal)}</span></div>
+            <div class="d-flex justify-content-between text-muted"><span>Tax</span><span>${formatPrice(o.tax_amount)}</span></div>
+            <div class="d-flex justify-content-between text-muted"><span>Service</span><span>${formatPrice(o.service_charge)}</span></div>
+            <div class="d-flex justify-content-between fw-bold fs-5 mt-2"><span>Total</span><span style="color:var(--primary)">${formatPrice(o.total)}</span></div>
+        `;
+        document.getElementById('orderModalFooter').innerHTML = o.status !== 'completed' && o.status !== 'cancelled' ? `
+            <button class="btn btn-danger" onclick="updateStatus(${o.id},'cancelled')"><i class="fas fa-times me-1"></i>Cancel</button>
+            <button class="btn btn-primary-custom" onclick="updateStatus(${o.id},'${STATUS_FLOW[o.status]}')">
+                ${STATUS_ACTIONS[o.status]} <i class="fas fa-arrow-right ms-1"></i>
+            </button>` : '<span class="text-muted">Order is ' + o.status + '</span>';
+        new bootstrap.Modal(document.getElementById('orderModal')).show();
+    } catch (e) { showToast('Could not load order details', 'danger'); }
+}
+
+async function updateStatus(id, newStatus) {
+    if (!newStatus) return;
+    try {
+        await api.patch(`/restaurant/orders/${id}/status/`, { status: newStatus });
+        showToast('Order status updated!', 'success');
+        loadOrders('');
+        const m = bootstrap.Modal.getInstance(document.getElementById('orderModal'));
+        if (m) m.hide();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadOrders('');
+setInterval(() => loadOrders(''), 15000);
+</script>
+{% endblock %}

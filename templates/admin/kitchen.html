@@ -1,0 +1,75 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_kitchen %}active{% endblock %}
+{% block page_title %}Kitchen Display{% endblock %}
+{% block page_subtitle %}Orders to prepare — auto-refreshes every 10 seconds{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kitchen-card { border-left: 5px solid; border-radius: var(--border-radius); background: #fff; padding: 20px; box-shadow: var(--card-shadow); }
+    .kitchen-card.status-confirmed { border-left-color: var(--info); }
+    .kitchen-card.status-preparing { border-left-color: var(--primary); animation: pulse 2s infinite; }
+    .kitchen-timer { font-size: 0.8rem; color: var(--danger); font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3" id="kitchenGrid"><div class="col-12"><div class="loading-spinner"></div></div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadKitchenOrders() {
+    try {
+        const data = await api.get('/kitchen/orders/');
+        const orders = data.results || data;
+        const grid = document.getElementById('kitchenGrid');
+
+        if (orders.length === 0) {
+            grid.innerHTML = '<div class="col-12"><div class="empty-state"><i class="fas fa-check-circle" style="color:var(--success);"></i><h4>All Clear!</h4><p class="text-muted">No orders to prepare right now.</p></div></div>';
+            return;
+        }
+
+        grid.innerHTML = orders.map(o => {
+            const mins = Math.round((Date.now() - new Date(o.created_at).getTime()) / 60000);
+            return `
+            <div class="col-md-4 col-sm-6">
+                <div class="kitchen-card status-${o.status}">
+                    <div class="d-flex justify-content-between mb-2">
+                        <h5 class="fw-bold mb-0">${o.order_number}</h5>
+                        <span class="badge-status badge-${o.status}">${o.status_display}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Table ${o.table_number || '-'}</strong>
+                        <span class="kitchen-timer ms-2"><i class="fas fa-stopwatch"></i> ${mins} min ago</span>
+                    </div>
+                    <hr>
+                    ${(o.items||[]).map(i => `
+                        <div class="mb-2">
+                            <div class="fw-bold">${i.quantity}× ${i.menu_item_name} ${i.variant_name ? `(${i.variant_name})` : ''}</div>
+                            ${(i.modifiers||[]).map(m => `<small class="badge bg-light text-dark me-1">${m.modifier_name}</small>`).join('')}
+                            ${i.special_instructions ? `<div class="text-info small"><i class="fas fa-comment"></i> ${i.special_instructions}</div>` : ''}
+                        </div>`).join('')}
+                    ${o.special_instructions ? `<div class="mt-2 p-2 bg-light rounded"><i class="fas fa-sticky-note text-warning"></i> ${o.special_instructions}</div>` : ''}
+                    <div class="mt-3 d-flex gap-2">
+                        ${o.status === 'confirmed' ? `<button class="btn btn-primary-custom btn-sm flex-fill" onclick="updateKitchenStatus(${o.id},'preparing')"><i class="fas fa-fire me-1"></i>Start Preparing</button>` : ''}
+                        ${o.status === 'preparing' ? `<button class="btn btn-sm flex-fill" style="background:var(--success);color:#fff;" onclick="updateKitchenStatus(${o.id},'ready')"><i class="fas fa-check me-1"></i>Mark Ready</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) { showToast('Could not load kitchen orders', 'danger'); }
+}
+
+async function updateKitchenStatus(id, status) {
+    try {
+        await api.patch(`/restaurant/orders/${id}/status/`, { status });
+        showToast('Order updated!', 'success');
+        loadKitchenOrders();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadKitchenOrders();
+setInterval(loadKitchenOrders, 10000);
+</script>
+{% endblock %}

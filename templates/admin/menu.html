@@ -1,0 +1,225 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_menu %}active{% endblock %}
+{% block page_title %}Menu Management{% endblock %}
+{% block page_subtitle %}Manage your categories, items, and modifiers{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Categories -->
+    <div class="col-lg-4">
+        <div class="card-custom p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Categories</h5>
+                <button class="btn btn-sm btn-primary-custom" onclick="showCategoryForm()"><i class="fas fa-plus"></i></button>
+            </div>
+            <div id="categoryForm" style="display:none;" class="mb-3">
+                <input type="text" class="form-control mb-2" id="catName" placeholder="Category name">
+                <input type="number" class="form-control mb-2" id="catOrder" placeholder="Display order" value="0">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-primary-custom" onclick="saveCategory()">Save</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="hideCategoryForm()">Cancel</button>
+                </div>
+                <input type="hidden" id="catEditId">
+            </div>
+            <div id="categoryList"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+
+    <!-- Menu Items -->
+    <div class="col-lg-8">
+        <div class="card-custom p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Menu Items</h5>
+                <button class="btn btn-sm btn-primary-custom" onclick="showItemForm()"><i class="fas fa-plus me-1"></i>Add Item</button>
+            </div>
+            <div id="menuItems"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Item Form Modal -->
+<div class="modal fade" id="itemFormModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="itemFormTitle">Add Menu Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="itemEditId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Category</label>
+                    <select class="form-select" id="itemCategory"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Name</label>
+                    <input type="text" class="form-control" id="itemName">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Description</label>
+                    <textarea class="form-control" id="itemDesc" rows="2"></textarea>
+                </div>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label fw-bold">Price (Rs.)</label>
+                        <input type="number" class="form-control" id="itemPrice" step="0.01">
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label fw-bold">Prep Time (min)</label>
+                        <input type="number" class="form-control" id="itemPrep" value="15">
+                    </div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="itemAvailable" checked>
+                    <label class="form-check-label" for="itemAvailable">Available</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary-custom" onclick="saveItem()">Save Item</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let categories = [];
+
+async function loadCategories() {
+    try {
+        const data = await api.get('/restaurant/menu/categories/');
+        categories = data.results || data;
+        const list = document.getElementById('categoryList');
+        list.innerHTML = categories.map(c => `
+            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                <div>
+                    <strong>${c.name}</strong>
+                    <small class="text-muted d-block">${c.items_count || 0} items</small>
+                </div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editCategory(${c.id},'${c.name}',${c.display_order})"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${c.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`).join('') || '<p class="text-muted text-center">No categories yet</p>';
+    } catch (e) { showToast('Could not load categories', 'danger'); }
+}
+
+function showCategoryForm() { document.getElementById('categoryForm').style.display = 'block'; document.getElementById('catName').focus(); }
+function hideCategoryForm() { document.getElementById('categoryForm').style.display = 'none'; document.getElementById('catEditId').value = ''; document.getElementById('catName').value = ''; }
+
+function editCategory(id, name, order) {
+    document.getElementById('catEditId').value = id;
+    document.getElementById('catName').value = name;
+    document.getElementById('catOrder').value = order;
+    showCategoryForm();
+}
+
+async function saveCategory() {
+    const id = document.getElementById('catEditId').value;
+    const data = { name: document.getElementById('catName').value, display_order: parseInt(document.getElementById('catOrder').value) || 0 };
+    try {
+        if (id) await api.put(`/restaurant/menu/categories/${id}/`, data);
+        else await api.post('/restaurant/menu/categories/', data);
+        showToast('Category saved!', 'success');
+        hideCategoryForm();
+        loadCategories();
+        loadMenuItems();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteCategory(id) {
+    if (!confirm('Delete this category? All items in it will also be deleted.')) return;
+    try { await api.delete(`/restaurant/menu/categories/${id}/`); showToast('Deleted', 'success'); loadCategories(); loadMenuItems(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function loadMenuItems() {
+    try {
+        const data = await api.get('/restaurant/menu/items/');
+        const items = data.results || data;
+        const container = document.getElementById('menuItems');
+        if (items.length === 0) { container.innerHTML = '<div class="empty-state"><i class="fas fa-utensils"></i><p>No menu items yet. Add your first item!</p></div>'; return; }
+        container.innerHTML = `<div class="table-responsive"><table class="table table-hover align-middle">
+            <thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${items.map(i => `<tr>
+                <td><strong>${i.name}</strong><br><small class="text-muted">${(i.description||'').substring(0, 40)}</small></td>
+                <td>${i.category_name}</td>
+                <td class="fw-bold">${formatPrice(i.price)}</td>
+                <td>
+                    <button class="btn btn-sm ${i.is_available ? 'btn-success' : 'btn-danger'}" onclick="toggleAvail(${i.id})">
+                        ${i.is_available ? 'Available' : 'Sold Out'}
+                    </button>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editItem(${i.id})"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${i.id})"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } catch (e) { showToast('Could not load items', 'danger'); }
+}
+
+function showItemForm() {
+    document.getElementById('itemFormTitle').textContent = 'Add Menu Item';
+    document.getElementById('itemEditId').value = '';
+    document.getElementById('itemName').value = '';
+    document.getElementById('itemDesc').value = '';
+    document.getElementById('itemPrice').value = '';
+    document.getElementById('itemPrep').value = '15';
+    document.getElementById('itemAvailable').checked = true;
+    const sel = document.getElementById('itemCategory');
+    sel.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    new bootstrap.Modal(document.getElementById('itemFormModal')).show();
+}
+
+async function editItem(id) {
+    try {
+        const item = await api.get(`/restaurant/menu/items/${id}/`);
+        document.getElementById('itemFormTitle').textContent = 'Edit Menu Item';
+        document.getElementById('itemEditId').value = id;
+        document.getElementById('itemName').value = item.name;
+        document.getElementById('itemDesc').value = item.description || '';
+        document.getElementById('itemPrice').value = item.price;
+        document.getElementById('itemPrep').value = item.prep_time;
+        document.getElementById('itemAvailable').checked = item.is_available;
+        const sel = document.getElementById('itemCategory');
+        sel.innerHTML = categories.map(c => `<option value="${c.id}" ${c.id === item.category ? 'selected' : ''}>${c.name}</option>`).join('');
+        new bootstrap.Modal(document.getElementById('itemFormModal')).show();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function saveItem() {
+    const id = document.getElementById('itemEditId').value;
+    const data = {
+        category: parseInt(document.getElementById('itemCategory').value),
+        name: document.getElementById('itemName').value,
+        description: document.getElementById('itemDesc').value,
+        price: parseFloat(document.getElementById('itemPrice').value),
+        prep_time: parseInt(document.getElementById('itemPrep').value),
+        is_available: document.getElementById('itemAvailable').checked,
+    };
+    try {
+        if (id) await api.put(`/restaurant/menu/items/${id}/`, data);
+        else await api.post('/restaurant/menu/items/', data);
+        showToast('Item saved!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('itemFormModal')).hide();
+        loadMenuItems();
+        loadCategories();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function toggleAvail(id) {
+    try { await api.patch(`/restaurant/menu/items/${id}/toggle/`); loadMenuItems(); } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteItem(id) {
+    if (!confirm('Delete this item?')) return;
+    try { await api.delete(`/restaurant/menu/items/${id}/`); showToast('Deleted', 'success'); loadMenuItems(); loadCategories(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadCategories();
+loadMenuItems();
+</script>
+{% endblock %}

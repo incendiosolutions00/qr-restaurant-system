@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block body %}
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <h4><i class="fas fa-utensils me-2"></i>Restaurant</h4>
+        <small id="sidebarRestaurantName">Admin Panel</small>
+    </div>
+    <nav>
+        <div class="sidebar-section">Main</div>
+        <a href="/admin-panel/" class="nav-link {% block nav_dashboard %}{% endblock %}">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/admin-panel/orders/" class="nav-link {% block nav_orders %}{% endblock %}">
+            <i class="fas fa-receipt"></i> Orders
+            <span class="badge bg-danger ms-auto" id="pendingBadge" style="display:none;"></span>
+        </a>
+        <a href="/admin-panel/kitchen/" class="nav-link {% block nav_kitchen %}{% endblock %}">
+            <i class="fas fa-fire"></i> Kitchen Display
+        </a>
+
+        <div class="sidebar-section">Menu</div>
+        <a href="/admin-panel/menu/" class="nav-link {% block nav_menu %}{% endblock %}">
+            <i class="fas fa-book-open"></i> Menu Items
+        </a>
+        <a href="/admin-panel/deals/" class="nav-link {% block nav_deals %}{% endblock %}">
+            <i class="fas fa-tags"></i> Deals
+        </a>
+
+        <div class="sidebar-section">Management</div>
+        <a href="/admin-panel/tables/" class="nav-link {% block nav_tables %}{% endblock %}">
+            <i class="fas fa-chair"></i> Tables & QR
+        </a>
+        <a href="/admin-panel/staff/" class="nav-link {% block nav_staff %}{% endblock %}">
+            <i class="fas fa-users"></i> Staff
+        </a>
+        <a href="/admin-panel/reports/" class="nav-link {% block nav_reports %}{% endblock %}">
+            <i class="fas fa-chart-bar"></i> Reports
+        </a>
+
+        <div class="sidebar-section">Account</div>
+        <a href="/admin-panel/settings/" class="nav-link {% block nav_settings %}{% endblock %}">
+            <i class="fas fa-cog"></i> Settings
+        </a>
+        <a href="#" class="nav-link" onclick="api.logout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </nav>
+</div>
+
+<!-- Mobile Toggle -->
+<button class="btn btn-dark d-md-none position-fixed" style="top:10px;left:10px;z-index:1100;" onclick="document.getElementById('sidebar').classList.toggle('show')">
+    <i class="fas fa-bars"></i>
+</button>
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="top-bar">
+        <div>
+            <h4 class="fw-bold mb-0">{% block page_title %}Dashboard{% endblock %}</h4>
+            <small class="text-muted">{% block page_subtitle %}{% endblock %}</small>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-muted" id="topBarUser"></span>
+        </div>
+    </div>
+
+    {% block content %}{% endblock %}
+</div>
+
+<script>
+// Check auth
+if (!api.isLoggedIn()) window.location.href = '/admin-panel/login/';
+const currentUser = api.getUser();
+if (currentUser) {
+    document.getElementById('topBarUser').textContent = currentUser.first_name || currentUser.username;
+    if (currentUser.restaurant_name) {
+        document.getElementById('sidebarRestaurantName').textContent = currentUser.restaurant_name;
+    }
+}
+</script>
+{% endblock %}

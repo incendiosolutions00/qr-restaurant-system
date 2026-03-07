@@ -1,0 +1,227 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_deals %}active{% endblock %}
+{% block page_title %}Deals & Offers{% endblock %}
+{% block page_subtitle %}Create and manage special offers{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-primary-custom" onclick="showDealForm()"><i class="fas fa-plus me-2"></i>Create Deal</button>
+</div>
+
+<div class="row g-3" id="dealsList"><div class="col-12"><div class="loading-spinner"></div></div></div>
+
+<!-- Deal Modal -->
+<div class="modal fade" id="dealModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title fw-bold" id="dealModalTitle">Create Deal</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="dealEditId">
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label fw-bold">Deal Name</label><input type="text" class="form-control" id="dealName"></div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Discount Type</label>
+                        <select class="form-select" id="dealType">
+                            <option value="percentage">Percentage</option>
+                            <option value="flat">Flat Amount</option>
+                            <option value="fixed_price">Fixed Price</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3"><label class="form-label fw-bold">Description</label><textarea class="form-control" id="dealDesc" rows="2"></textarea></div>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Discount Value</label><input type="number" class="form-control" id="dealValue" step="0.01"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">Start Date</label><input type="date" class="form-control" id="dealStart"></div>
+                    <div class="col-md-4 mb-3"><label class="form-label fw-bold">End Date</label><input type="date" class="form-control" id="dealEnd"></div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="dealActive" checked>
+                    <label class="form-check-label fw-bold" for="dealActive">Active</label>
+                </div>
+
+                <!-- Deal Items (shown after initial save) -->
+                <div id="dealItemsSection" style="display:none;">
+                    <hr>
+                    <h6 class="fw-bold">Deal Items</h6>
+                    <div id="dealItemsList" class="mb-3"></div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col">
+                            <label class="form-label">Menu Item</label>
+                            <select class="form-select" id="dealItemSelect"></select>
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label">Qty</label>
+                            <input type="number" class="form-control" id="dealItemQty" value="1" min="1">
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary-custom" onclick="addDealItem()"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary-custom" onclick="saveDeal()">Save Deal</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let menuItems = [];
+
+async function loadMenuItems() {
+    try {
+        const data = await api.get('/restaurant/menu/items/');
+        menuItems = data.results || data;
+    } catch {}
+}
+
+async function loadDeals() {
+    try {
+        const data = await api.get('/restaurant/menu/deals/');
+        const deals = data.results || data;
+        const container = document.getElementById('dealsList');
+        if (deals.length === 0) {
+            container.innerHTML = '<div class="col-12"><div class="empty-state"><i class="fas fa-tags"></i><p>No deals yet. Create your first deal!</p></div></div>';
+            return;
+        }
+        container.innerHTML = deals.map(d => `
+            <div class="col-md-4">
+                <div class="card-custom p-4">
+                    <div class="d-flex justify-content-between mb-2">
+                        <h5 class="fw-bold">${d.name}</h5>
+                        ${d.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}
+                    </div>
+                    <p class="text-muted small mb-2">${d.description || 'No description'}</p>
+                    <div class="mb-2">
+                        <span class="fs-4 fw-800" style="color:var(--primary);">
+                            ${d.discount_type === 'percentage' ? d.discount_value + '%' : formatPrice(d.discount_value)}
+                        </span>
+                        <span class="badge bg-light text-dark ms-2">${d.discount_type}</span>
+                    </div>
+                    <div class="text-muted small mb-3">
+                        <i class="fas fa-calendar me-1"></i>${d.start_date || 'Always'} — ${d.end_date || 'No end'}
+                    </div>
+                    ${d.items && d.items.length > 0 ? `<div class="mb-3">${d.items.map(i => `<span class="badge bg-light text-dark me-1 mb-1">${i.quantity}× ${i.menu_item_name || 'Item'}</span>`).join('')}</div>` : ''}
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-custom" onclick="editDeal(${d.id})"><i class="fas fa-edit me-1"></i>Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteDeal(${d.id})"><i class="fas fa-trash me-1"></i>Delete</button>
+                    </div>
+                </div>
+            </div>`).join('');
+    } catch (e) { showToast('Could not load deals', 'danger'); }
+}
+
+function showDealForm() {
+    document.getElementById('dealEditId').value = '';
+    document.getElementById('dealName').value = '';
+    document.getElementById('dealDesc').value = '';
+    document.getElementById('dealType').value = 'percentage';
+    document.getElementById('dealValue').value = '';
+    document.getElementById('dealStart').value = '';
+    document.getElementById('dealEnd').value = '';
+    document.getElementById('dealActive').checked = true;
+    document.getElementById('dealItemsSection').style.display = 'none';
+    document.getElementById('dealModalTitle').textContent = 'Create Deal';
+    new bootstrap.Modal(document.getElementById('dealModal')).show();
+}
+
+async function editDeal(id) {
+    try {
+        const d = await api.get(`/restaurant/menu/deals/${id}/`);
+        document.getElementById('dealEditId').value = d.id;
+        document.getElementById('dealName').value = d.name;
+        document.getElementById('dealDesc').value = d.description || '';
+        document.getElementById('dealType').value = d.discount_type;
+        document.getElementById('dealValue').value = d.discount_value;
+        document.getElementById('dealStart').value = d.start_date || '';
+        document.getElementById('dealEnd').value = d.end_date || '';
+        document.getElementById('dealActive').checked = d.is_active;
+        document.getElementById('dealModalTitle').textContent = 'Edit Deal';
+
+        // Show deal items section
+        document.getElementById('dealItemsSection').style.display = 'block';
+        populateMenuItemSelect();
+        loadDealItems(d.id);
+
+        new bootstrap.Modal(document.getElementById('dealModal')).show();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+function populateMenuItemSelect() {
+    const sel = document.getElementById('dealItemSelect');
+    sel.innerHTML = menuItems.map(i => `<option value="${i.id}">${i.name} — ${formatPrice(i.base_price)}</option>`).join('');
+}
+
+async function loadDealItems(dealId) {
+    try {
+        const items = await api.get(`/restaurant/menu/deals/${dealId}/items/`);
+        const list = items.results || items;
+        document.getElementById('dealItemsList').innerHTML = list.length === 0
+            ? '<p class="text-muted small">No items added yet</p>'
+            : list.map(i => `<div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                <span>${i.quantity}× ${i.menu_item_name || 'Item #' + i.menu_item}</span>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeDealItem(${document.getElementById('dealEditId').value}, ${i.id})"><i class="fas fa-times"></i></button>
+            </div>`).join('');
+    } catch {}
+}
+
+async function addDealItem() {
+    const dealId = document.getElementById('dealEditId').value;
+    if (!dealId) { showToast('Save the deal first, then add items', 'warning'); return; }
+    const menuItem = document.getElementById('dealItemSelect').value;
+    const qty = parseInt(document.getElementById('dealItemQty').value) || 1;
+    try {
+        await api.post(`/restaurant/menu/deals/${dealId}/items/`, { menu_item: menuItem, quantity: qty });
+        showToast('Item added!', 'success');
+        loadDealItems(dealId);
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function removeDealItem(dealId, itemId) {
+    try {
+        await api.delete(`/restaurant/menu/deals/${dealId}/items/${itemId}/`);
+        loadDealItems(dealId);
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function saveDeal() {
+    const editId = document.getElementById('dealEditId').value;
+    const data = {
+        name: document.getElementById('dealName').value,
+        description: document.getElementById('dealDesc').value,
+        discount_type: document.getElementById('dealType').value,
+        discount_value: parseFloat(document.getElementById('dealValue').value),
+        start_date: document.getElementById('dealStart').value || null,
+        end_date: document.getElementById('dealEnd').value || null,
+        is_active: document.getElementById('dealActive').checked,
+    };
+    try {
+        if (editId) {
+            await api.put(`/restaurant/menu/deals/${editId}/`, data);
+            showToast('Deal updated!', 'success');
+        } else {
+            const created = await api.post('/restaurant/menu/deals/', data);
+            showToast('Deal created! You can now add items.', 'success');
+            document.getElementById('dealEditId').value = created.id;
+            document.getElementById('dealItemsSection').style.display = 'block';
+            populateMenuItemSelect();
+            loadDealItems(created.id);
+            return; // Keep modal open to add items
+        }
+        bootstrap.Modal.getInstance(document.getElementById('dealModal')).hide();
+        loadDeals();
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteDeal(id) {
+    if (!confirm('Delete this deal?')) return;
+    try { await api.delete(`/restaurant/menu/deals/${id}/`); showToast('Deal deleted', 'success'); loadDeals(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+loadMenuItems();
+loadDeals();
+</script>
+{% endblock %}

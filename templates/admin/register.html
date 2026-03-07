@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Register — QR Restaurant System{% endblock %}
+
+{% block body %}
+<div class="login-page">
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <div class="login-icon"><i class="fas fa-utensils"></i></div>
+            <h3 class="fw-bold">Register Your Restaurant</h3>
+            <p class="text-muted">Create an account to get started</p>
+        </div>
+
+        <!-- Step 1: Account -->
+        <div id="step1">
+            <h6 class="fw-bold mb-3"><span class="badge bg-primary me-2">1</span>Account Details</h6>
+            <div class="mb-3"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="regUsername" placeholder="Choose a username"></div>
+            <div class="row">
+                <div class="col-6 mb-3"><label class="form-label fw-bold">First Name</label><input type="text" class="form-control" id="regFirst"></div>
+                <div class="col-6 mb-3"><label class="form-label fw-bold">Last Name</label><input type="text" class="form-control" id="regLast"></div>
+            </div>
+            <div class="mb-3"><label class="form-label fw-bold">Email</label><input type="email" class="form-control" id="regEmail" placeholder="your@email.com"></div>
+            <div class="mb-3"><label class="form-label fw-bold">Phone</label><input type="text" class="form-control" id="regPhone" placeholder="03xx-xxxxxxx"></div>
+            <div class="mb-3"><label class="form-label fw-bold">Password</label><input type="password" class="form-control" id="regPassword"></div>
+            <div class="mb-3"><label class="form-label fw-bold">Confirm Password</label><input type="password" class="form-control" id="regConfirm"></div>
+            <button class="btn btn-primary-custom w-100" onclick="goStep2()">Next: Restaurant Details <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+
+        <!-- Step 2: Restaurant -->
+        <div id="step2" style="display:none;">
+            <h6 class="fw-bold mb-3"><span class="badge bg-primary me-2">2</span>Restaurant Details</h6>
+            <div class="mb-3"><label class="form-label fw-bold">Restaurant Name</label><input type="text" class="form-control" id="regRestName"></div>
+            <div class="mb-3"><label class="form-label fw-bold">Restaurant Slug</label><input type="text" class="form-control" id="regSlug" placeholder="my-restaurant (URL-friendly)"></div>
+            <div class="mb-3"><label class="form-label fw-bold">Description</label><textarea class="form-control" id="regDesc" rows="2" placeholder="Brief description of your restaurant"></textarea></div>
+            <div class="row">
+                <div class="col-8 mb-3"><label class="form-label fw-bold">Address</label><input type="text" class="form-control" id="regAddress"></div>
+                <div class="col-4 mb-3"><label class="form-label fw-bold">City</label><input type="text" class="form-control" id="regCity" value="Lahore"></div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-custom flex-fill" onclick="goStep1()"><i class="fas fa-arrow-left me-2"></i>Back</button>
+                <button class="btn btn-primary-custom flex-fill" onclick="submitRegistration()"><i class="fas fa-check me-2"></i>Register</button>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <span class="text-muted">Already have an account?</span>
+            <a href="/admin-panel/login/" class="fw-bold" style="color:var(--primary);">Login</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function goStep2() {
+    const user = document.getElementById('regUsername').value;
+    const pwd = document.getElementById('regPassword').value;
+    const confirm = document.getElementById('regConfirm').value;
+    if (!user) { showToast('Username is required', 'danger'); return; }
+    if (!pwd) { showToast('Password is required', 'danger'); return; }
+    if (pwd !== confirm) { showToast('Passwords do not match', 'danger'); return; }
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+
+    // Auto-generate slug from restaurant name
+    document.getElementById('regRestName').addEventListener('input', function() {
+        document.getElementById('regSlug').value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    });
+}
+
+function goStep1() {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+}
+
+async function submitRegistration() {
+    const restName = document.getElementById('regRestName').value;
+    const slug = document.getElementById('regSlug').value;
+    if (!restName || !slug) { showToast('Restaurant name and slug are required', 'danger'); return; }
+
+    const data = {
+        username: document.getElementById('regUsername').value,
+        password: document.getElementById('regPassword').value,
+        password_confirm: document.getElementById('regConfirm').value,
+        first_name: document.getElementById('regFirst').value,
+        last_name: document.getElementById('regLast').value,
+        email: document.getElementById('regEmail').value,
+        phone: document.getElementById('regPhone').value,
+        restaurant_name: restName,
+        restaurant_slug: slug,
+        restaurant_description: document.getElementById('regDesc').value,
+        restaurant_address: document.getElementById('regAddress').value,
+        restaurant_city: document.getElementById('regCity').value,
+    };
+
+    try {
+        await api.publicPost('/register/', data);
+        showToast('Registration successful! Please login.', 'success');
+        setTimeout(() => window.location.href = '/admin-panel/login/', 1500);
+    } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+{% endblock %}

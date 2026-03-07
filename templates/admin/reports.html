@@ -1,0 +1,78 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block nav_reports %}active{% endblock %}
+{% block page_title %}Reports & Analytics{% endblock %}
+{% block page_subtitle %}Sales performance and insights{% endblock %}
+
+{% block content %}
+<!-- Date Range Filter -->
+<div class="card-custom p-3 mb-4">
+    <div class="row align-items-end g-3">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Start Date</label>
+            <input type="date" class="form-control" id="startDate">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">End Date</label>
+            <input type="date" class="form-control" id="endDate">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary-custom w-100" onclick="loadReports()"><i class="fas fa-search me-2"></i>Filter</button>
+        </div>
+    </div>
+</div>
+
+<!-- Sales Stats -->
+<div class="row g-3 mb-4" id="salesStats">
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-orange"><div class="stat-number" id="rptOrders">-</div><div class="stat-label">Orders</div></div></div>
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-green"><div class="stat-number" id="rptRevenue">-</div><div class="stat-label">Revenue</div></div></div>
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-blue"><div class="stat-number" id="rptAvg">-</div><div class="stat-label">Avg Order</div></div></div>
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-purple"><div class="stat-number" id="rptTax">-</div><div class="stat-label">Tax</div></div></div>
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-red"><div class="stat-number" id="rptDiscount">-</div><div class="stat-label">Discounts</div></div></div>
+    <div class="col-md-2 col-4"><div class="stat-card bg-gradient-dark"><div class="stat-number" id="rptService">-</div><div class="stat-label">Service</div></div></div>
+</div>
+
+<!-- Top Items -->
+<div class="card-custom p-4">
+    <h5 class="fw-bold mb-3">Top Selling Items</h5>
+    <div id="topItemsList"><div class="loading-spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set default dates
+const today = new Date().toISOString().split('T')[0];
+const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+document.getElementById('startDate').value = monthAgo;
+document.getElementById('endDate').value = today;
+
+async function loadReports() {
+    const start = document.getElementById('startDate').value;
+    const end = document.getElementById('endDate').value;
+    try {
+        const sales = await api.get(`/restaurant/reports/sales/?start_date=${start}&end_date=${end}`);
+        document.getElementById('rptOrders').textContent = sales.total_orders;
+        document.getElementById('rptRevenue').textContent = formatPrice(sales.gross_revenue);
+        document.getElementById('rptAvg').textContent = formatPrice(sales.avg_order_value);
+        document.getElementById('rptTax').textContent = formatPrice(sales.tax_collected);
+        document.getElementById('rptDiscount').textContent = formatPrice(sales.discounts_given);
+        document.getElementById('rptService').textContent = formatPrice(sales.service_charges);
+
+        const items = await api.get(`/restaurant/reports/items/?start_date=${start}&end_date=${end}`);
+        const list = document.getElementById('topItemsList');
+        if (items.length === 0) { list.innerHTML = '<p class="text-muted text-center">No data for this period</p>'; return; }
+        list.innerHTML = `<div class="table-responsive"><table class="table table-hover">
+            <thead><tr><th>#</th><th>Item</th><th>Qty Sold</th><th>Revenue</th></tr></thead>
+            <tbody>${items.map((i, idx) => `<tr>
+                <td><span class="badge bg-light text-dark">${idx + 1}</span></td>
+                <td class="fw-bold">${i.menu_item__name}</td>
+                <td>${i.total_qty}</td>
+                <td class="fw-bold">${formatPrice(i.total_revenue)}</td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } catch (e) { showToast('Could not load reports', 'danger'); }
+}
+
+loadReports();
+</script>
+{% endblock %}

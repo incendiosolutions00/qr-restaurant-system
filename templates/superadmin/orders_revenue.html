@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Orders & Revenue — Super Admin{% endblock %}
+
+{% block body %}
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <h4><i class="fas fa-shield-alt me-2"></i>Super Admin</h4>
+        <small>Platform Control Panel</small>
+    </div>
+    <nav>
+        <div class="sidebar-section">Overview</div>
+        <a href="/superadmin/" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <div class="sidebar-section">Management</div>
+        <a href="/superadmin/restaurants/" class="nav-link"><i class="fas fa-store"></i> Restaurants</a>
+        <a href="/superadmin/users/" class="nav-link"><i class="fas fa-users"></i> Users</a>
+        <a href="/superadmin/plans/" class="nav-link"><i class="fas fa-crown"></i> Plans</a>
+        <div class="sidebar-section">Reports</div>
+        <a href="/superadmin/orders-revenue/" class="nav-link active"><i class="fas fa-chart-bar"></i> Orders & Revenue</a>
+        <div class="sidebar-section">Account</div>
+        <a href="#" class="nav-link" onclick="api.logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="top-bar">
+        <div>
+            <h4 class="fw-bold mb-0">Orders & Revenue</h4>
+            <small class="text-muted">Detailed breakdown by restaurant</small>
+        </div>
+    </div>
+
+    <!-- Date Filter -->
+    <div class="card-custom p-3 mb-4">
+        <div class="row align-items-end g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Start Date</label>
+                <input type="date" class="form-control" id="startDate">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">End Date</label>
+                <input type="date" class="form-control" id="endDate">
+            </div>
+            <div class="col-md-4">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-custom btn-sm" onclick="setRange('today')">Today</button>
+                    <button class="btn btn-outline-custom btn-sm" onclick="setRange('week')">This Week</button>
+                    <button class="btn btn-outline-custom btn-sm" onclick="setRange('month')">This Month</button>
+                    <button class="btn btn-outline-custom btn-sm" onclick="setRange('year')">This Year</button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary-custom w-100" onclick="loadData()"><i class="fas fa-search me-2"></i>Filter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="stat-card bg-gradient-blue">
+                <div class="stat-number" id="totalOrders">-</div>
+                <div class="stat-label">Total Orders</div>
+                <div class="stat-icon"><i class="fas fa-receipt"></i></div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card bg-gradient-green">
+                <div class="stat-number" id="completedOrders">-</div>
+                <div class="stat-label">Completed</div>
+                <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card bg-gradient-orange">
+                <div class="stat-number" id="pendingOrders">-</div>
+                <div class="stat-label">Pending</div>
+                <div class="stat-icon"><i class="fas fa-clock"></i></div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card bg-gradient-purple">
+                <div class="stat-number" id="totalRevenue">-</div>
+                <div class="stat-label">Total Revenue</div>
+                <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-Restaurant Breakdown -->
+    <div class="card-custom p-4">
+        <h5 class="fw-bold mb-3">Restaurant-wise Breakdown</h5>
+        <div id="breakdownTable"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+if (!api.isLoggedIn()) window.location.href = '/admin-panel/login/';
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function setRange(range) {
+    const today = new Date();
+    let start = new Date();
+    if (range === 'today') { start = today; }
+    else if (range === 'week') { start.setDate(today.getDate() - today.getDay()); }
+    else if (range === 'month') { start = new Date(today.getFullYear(), today.getMonth(), 1); }
+    else if (range === 'year') { start = new Date(today.getFullYear(), 0, 1); }
+    document.getElementById('startDate').value = start.toISOString().split('T')[0];
+    document.getElementById('endDate').value = today.toISOString().split('T')[0];
+    loadData();
+}
+
+async function loadData() {
+    const start = document.getElementById('startDate').value;
+    const end = document.getElementById('endDate').value;
+    if (!start || !end) { showToast('Please select date range', 'danger'); return; }
+
+    try {
+        const data = await api.get(`/superadmin/analytics/orders/?start_date=${start}&end_date=${end}`);
+
+        // Totals
+        document.getElementById('totalOrders').textContent = data.totals.total_orders;
+        document.getElementById('completedOrders').textContent = data.totals.completed_orders;
+        document.getElementById('pendingOrders').textContent = data.totals.pending_orders;
+        document.getElementById('totalRevenue').textContent = formatPrice(data.totals.revenue);
+
+        // Table
+        const list = data.restaurants;
+        document.getElementById('breakdownTable').innerHTML = list.length === 0
+            ? '<div class="empty-state"><i class="fas fa-chart-bar"></i><p>No orders found for this date range</p></div>'
+            : `<div class="table-responsive"><table class="table table-hover align-middle">
+                <thead><tr>
+                    <th>Restaurant</th>
+                    <th class="text-center">Total Orders</th>
+                    <th class="text-center">Completed</th>
+                    <th class="text-center">Pending</th>
+                    <th class="text-center">Cancelled</th>
+                    <th class="text-end">Revenue</th>
+                </tr></thead>
+                <tbody>
+                ${list.map(r => `<tr>
+                    <td><strong>${r.restaurant_name}</strong><br><small class="text-muted">${r.restaurant_slug}</small></td>
+                    <td class="text-center"><span class="badge bg-primary fs-6">${r.total_orders}</span></td>
+                    <td class="text-center"><span class="badge bg-success">${r.completed_orders}</span></td>
+                    <td class="text-center"><span class="badge bg-warning text-dark">${r.pending_orders}</span></td>
+                    <td class="text-center"><span class="badge bg-danger">${r.cancelled_orders}</span></td>
+                    <td class="text-end fw-bold" style="color:var(--primary);">${formatPrice(r.revenue)}</td>
+                </tr>`).join('')}
+                <tr class="table-dark fw-bold">
+                    <td>TOTAL</td>
+                    <td class="text-center">${data.totals.total_orders}</td>
+                    <td class="text-center">${data.totals.completed_orders}</td>
+                    <td class="text-center">${data.totals.pending_orders}</td>
+                    <td class="text-center">-</td>
+                    <td class="text-end">${formatPrice(data.totals.revenue)}</td>
+                </tr>
+                </tbody></table></div>`;
+    } catch (e) { showToast('Could not load data', 'danger'); }
+}
+
+// Default: today
+document.getElementById('startDate').value = todayStr();
+document.getElementById('endDate').value = todayStr();
+loadData();
+</script>
+{% endblock %}

@@ -86,7 +86,19 @@ const api = {
         const text = await response.text();
         const data = text ? JSON.parse(text) : {};
         if (!response.ok) {
-            const errMsg = data.detail || Object.values(data).flat().join(', ') || 'Something went wrong';
+            let errMsg = data.detail;
+            if (!errMsg) {
+                // Recursively extract error messages from nested objects
+                const extract = (obj) => {
+                    if (typeof obj === 'string') return obj;
+                    if (Array.isArray(obj)) return obj.map(extract).join(', ');
+                    if (typeof obj === 'object' && obj !== null) {
+                        return Object.entries(obj).map(([k, v]) => `${k}: ${extract(v)}`).join('; ');
+                    }
+                    return String(obj);
+                };
+                errMsg = extract(data) || 'Something went wrong';
+            }
             throw new Error(errMsg);
         }
         return data;
@@ -138,6 +150,15 @@ const api = {
 
     delete(endpoint) {
         return this.request(endpoint, { method: 'DELETE' });
+    },
+
+    // FormData upload (for file uploads - don't set Content-Type, let browser set it)
+    async uploadForm(endpoint, formData, method = 'POST') {
+        const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+        const headers = { 'X-CSRFToken': this.getCsrfToken() };
+        if (this.getToken()) headers['Authorization'] = `Bearer ${this.getToken()}`;
+        const response = await fetch(url, { method, headers, body: formData });
+        return this.handleResponse(response);
     },
 
     // Public (no auth)

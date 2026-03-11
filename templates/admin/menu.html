@@ -70,6 +70,11 @@
                         <input type="number" class="form-control" id="itemPrep" value="15">
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Image</label>
+                    <input type="file" class="form-control" id="itemImage" accept="image/*">
+                    <div id="itemImagePreview" class="mt-2"></div>
+                </div>
                 <div class="form-check mb-3">
                     <input class="form-check-input" type="checkbox" id="itemAvailable" checked>
                     <label class="form-check-label" for="itemAvailable">Available</label>
@@ -144,7 +149,12 @@ async function loadMenuItems() {
         container.innerHTML = `<div class="table-responsive"><table class="table table-hover align-middle">
             <thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>${items.map(i => `<tr>
-                <td><strong>${i.name}</strong><br><small class="text-muted">${(i.description||'').substring(0, 40)}</small></td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        ${i.image ? `<img src="${i.image}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">` : '<div style="width:40px;height:40px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-image text-muted" style="font-size:0.8rem;"></i></div>'}
+                        <div><strong>${i.name}</strong><br><small class="text-muted">${(i.description||'').substring(0, 40)}</small></div>
+                    </div>
+                </td>
                 <td>${i.category_name}</td>
                 <td class="fw-bold">${formatPrice(i.price)}</td>
                 <td>
@@ -168,6 +178,8 @@ function showItemForm() {
     document.getElementById('itemPrice').value = '';
     document.getElementById('itemPrep').value = '15';
     document.getElementById('itemAvailable').checked = true;
+    document.getElementById('itemImage').value = '';
+    document.getElementById('itemImagePreview').innerHTML = '';
     const sel = document.getElementById('itemCategory');
     sel.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     new bootstrap.Modal(document.getElementById('itemFormModal')).show();
@@ -183,6 +195,10 @@ async function editItem(id) {
         document.getElementById('itemPrice').value = item.price;
         document.getElementById('itemPrep').value = item.prep_time;
         document.getElementById('itemAvailable').checked = item.is_available;
+        document.getElementById('itemImage').value = '';
+        document.getElementById('itemImagePreview').innerHTML = item.image
+            ? `<img src="${item.image}" style="max-height:80px;border-radius:8px;" alt="Current image">`
+            : '<small class="text-muted">No image</small>';
         const sel = document.getElementById('itemCategory');
         sel.innerHTML = categories.map(c => `<option value="${c.id}" ${c.id === item.category ? 'selected' : ''}>${c.name}</option>`).join('');
         new bootstrap.Modal(document.getElementById('itemFormModal')).show();
@@ -191,17 +207,20 @@ async function editItem(id) {
 
 async function saveItem() {
     const id = document.getElementById('itemEditId').value;
-    const data = {
-        category: parseInt(document.getElementById('itemCategory').value),
-        name: document.getElementById('itemName').value,
-        description: document.getElementById('itemDesc').value,
-        price: parseFloat(document.getElementById('itemPrice').value),
-        prep_time: parseInt(document.getElementById('itemPrep').value),
-        is_available: document.getElementById('itemAvailable').checked,
-    };
+    const imageFile = document.getElementById('itemImage').files[0];
+
+    const formData = new FormData();
+    formData.append('category', document.getElementById('itemCategory').value);
+    formData.append('name', document.getElementById('itemName').value);
+    formData.append('description', document.getElementById('itemDesc').value);
+    formData.append('price', document.getElementById('itemPrice').value);
+    formData.append('prep_time', document.getElementById('itemPrep').value);
+    formData.append('is_available', document.getElementById('itemAvailable').checked);
+    if (imageFile) formData.append('image', imageFile);
+
     try {
-        if (id) await api.put(`/restaurant/menu/items/${id}/`, data);
-        else await api.post('/restaurant/menu/items/', data);
+        if (id) await api.uploadForm(`/restaurant/menu/items/${id}/`, formData, 'PUT');
+        else await api.uploadForm('/restaurant/menu/items/', formData, 'POST');
         showToast('Item saved!', 'success');
         bootstrap.Modal.getInstance(document.getElementById('itemFormModal')).hide();
         loadMenuItems();

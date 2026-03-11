@@ -30,7 +30,7 @@ class RestaurantSerializer(serializers.ModelSerializer):
             'plan_name', 'plan_id', 'subscription_status',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'owner', 'is_approved', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'owner', 'slug', 'is_approved', 'created_at', 'updated_at']
 
     def get_plan_name(self, obj):
         sub = getattr(obj, 'subscription', None)

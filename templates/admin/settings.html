@@ -225,7 +225,7 @@ async function saveSettings() {
         closure_reason: document.getElementById('closureReason').value,
     };
     try {
-        await api.put('/restaurant/profile/', data);
+        await api.patch('/restaurant/profile/', data);
         showToast('Settings saved!', 'success');
         loadSettings();
     } catch (e) { showToast(e.message, 'danger'); }

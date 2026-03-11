@@ -35,6 +35,12 @@
             </div>
         </div>
 
+        <!-- Operating Hours -->
+        <div class="card-custom p-4 mt-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-clock me-2 text-muted"></i>Operating Hours</h5>
+            <div id="operatingHoursContainer"></div>
+        </div>
+
         <div class="mt-4">
             <button class="btn btn-primary-custom btn-lg" onclick="saveSettings()"><i class="fas fa-save me-2"></i>Save Changes</button>
         </div>
@@ -53,8 +59,32 @@
                 <span class="fw-bold" id="setActive">-</span>
             </div>
             <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Currently</span>
+                <span class="fw-bold" id="currentOpenStatus">-</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
                 <span class="text-muted">Joined</span>
                 <span class="fw-bold" id="setJoined">-</span>
+            </div>
+        </div>
+
+        <!-- Restaurant Open/Close Control -->
+        <div class="card-custom p-4 mt-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-door-open me-2 text-muted"></i>Restaurant Control</h5>
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="manualClosure" onchange="toggleClosure()">
+                <label class="form-check-label fw-bold" for="manualClosure">Manually Close Restaurant</label>
+            </div>
+            <div id="closureReasonDiv" style="display:none;">
+                <label class="form-label fw-bold">Closure Message</label>
+                <select class="form-select mb-2" id="closurePreset" onchange="applyPreset()">
+                    <option value="">Custom message...</option>
+                    <option value="Under maintenance. We'll be back soon!">Under Maintenance</option>
+                    <option value="Temporarily closed due to a private event.">Private Event</option>
+                    <option value="Closed for renovation. Opening soon!">Renovation</option>
+                    <option value="We are on a short break. Back shortly!">Short Break</option>
+                </select>
+                <textarea class="form-control" id="closureReason" rows="2" placeholder="e.g. Closed for maintenance, Back at 6pm..."></textarea>
             </div>
         </div>
 
@@ -78,6 +108,75 @@
 
 {% block extra_js %}
 <script>
+// ─── Operating Hours ─────────────────────────────────────────────────────
+const DAYS = [
+    { key: 'mon', label: 'Monday' },
+    { key: 'tue', label: 'Tuesday' },
+    { key: 'wed', label: 'Wednesday' },
+    { key: 'thu', label: 'Thursday' },
+    { key: 'fri', label: 'Friday' },
+    { key: 'sat', label: 'Saturday' },
+    { key: 'sun', label: 'Sunday' },
+];
+
+function renderOperatingHours(hours) {
+    const container = document.getElementById('operatingHoursContainer');
+    container.innerHTML = DAYS.map(day => {
+        const h = hours[day.key];
+        const isOpen = h && h.open;
+        return `
+        <div class="row align-items-center mb-2">
+            <div class="col-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="day_${day.key}"
+                           ${isOpen ? 'checked' : ''} onchange="toggleDay('${day.key}')">
+                    <label class="form-check-label fw-bold" for="day_${day.key}">${day.label}</label>
+                </div>
+            </div>
+            <div class="col-4">
+                <input type="time" class="form-control form-control-sm" id="open_${day.key}"
+                       value="${isOpen ? h.open : '09:00'}" ${isOpen ? '' : 'disabled'}>
+            </div>
+            <div class="col-1 text-center text-muted">to</div>
+            <div class="col-4">
+                <input type="time" class="form-control form-control-sm" id="close_${day.key}"
+                       value="${isOpen ? h.close : '23:00'}" ${isOpen ? '' : 'disabled'}>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleDay(key) {
+    const checked = document.getElementById(`day_${key}`).checked;
+    document.getElementById(`open_${key}`).disabled = !checked;
+    document.getElementById(`close_${key}`).disabled = !checked;
+}
+
+function collectOperatingHours() {
+    const hours = {};
+    DAYS.forEach(day => {
+        if (document.getElementById(`day_${day.key}`).checked) {
+            hours[day.key] = {
+                open: document.getElementById(`open_${day.key}`).value,
+                close: document.getElementById(`close_${day.key}`).value,
+            };
+        }
+    });
+    return hours;
+}
+
+// ─── Closure Control ─────────────────────────────────────────────────────
+function toggleClosure() {
+    document.getElementById('closureReasonDiv').style.display =
+        document.getElementById('manualClosure').checked ? 'block' : 'none';
+}
+
+function applyPreset() {
+    const val = document.getElementById('closurePreset').value;
+    if (val) document.getElementById('closureReason').value = val;
+}
+
+// ─── Load Settings ───────────────────────────────────────────────────────
 async function loadSettings() {
     try {
         const r = await api.get('/restaurant/profile/');
@@ -94,10 +193,22 @@ async function loadSettings() {
 
         document.getElementById('setApproved').innerHTML = r.is_approved ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-warning">Pending</span>';
         document.getElementById('setActive').innerHTML = r.is_active ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-danger">No</span>';
+        document.getElementById('currentOpenStatus').innerHTML = r.is_open
+            ? '<span class="badge bg-success">Open</span>'
+            : '<span class="badge bg-danger">Closed</span>';
         document.getElementById('setJoined').textContent = formatDate(r.created_at);
+
+        // Operating hours
+        renderOperatingHours(r.operating_hours || {});
+
+        // Closure
+        document.getElementById('manualClosure').checked = r.is_manually_closed || false;
+        document.getElementById('closureReason').value = r.closure_reason || '';
+        toggleClosure();
     } catch (e) { showToast('Could not load settings', 'danger'); }
 }
 
+// ─── Save Settings ───────────────────────────────────────────────────────
 async function saveSettings() {
     const data = {
         name: document.getElementById('setName').value,
@@ -109,13 +220,18 @@ async function saveSettings() {
         tax_rate: parseFloat(document.getElementById('setTax').value) || 0,
         service_charge_rate: parseFloat(document.getElementById('setService').value) || 0,
         currency_symbol: document.getElementById('setCurrency').value,
+        operating_hours: collectOperatingHours(),
+        is_manually_closed: document.getElementById('manualClosure').checked,
+        closure_reason: document.getElementById('closureReason').value,
     };
     try {
         await api.put('/restaurant/profile/', data);
         showToast('Settings saved!', 'success');
+        loadSettings();
     } catch (e) { showToast(e.message, 'danger'); }
 }
 
+// ─── Change Password ─────────────────────────────────────────────────────
 async function changePassword() {
     const newPwd = document.getElementById('pwdNew').value;
     const confirm = document.getElementById('pwdConfirm').value;
@@ -132,6 +248,7 @@ async function changePassword() {
     } catch (e) { showToast(e.message, 'danger'); }
 }
 
+// ─── Subscription ────────────────────────────────────────────────────────
 async function loadSubscription() {
     try {
         const sub = await api.get('/subscriptions/my/');

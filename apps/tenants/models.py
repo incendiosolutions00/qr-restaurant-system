@@ -40,6 +40,13 @@ class Restaurant(TimeStampedModel):
     # Status
     is_active = models.BooleanField(default=True)
     is_approved = models.BooleanField(default=False)
+    is_manually_closed = models.BooleanField(
+        default=False, help_text='Admin can manually close the restaurant'
+    )
+    closure_reason = models.CharField(
+        max_length=500, blank=True, default='',
+        help_text='Reason shown to customers when manually closed'
+    )
 
     class Meta:
         ordering = ['name']
@@ -52,6 +59,8 @@ class Restaurant(TimeStampedModel):
 
     @property
     def is_open(self):
+        if self.is_manually_closed:
+            return False
         from django.utils import timezone
         now = timezone.localtime()
         day = now.strftime('%a').lower()[:3]
@@ -60,6 +69,34 @@ class Restaurant(TimeStampedModel):
             return False
         current_time = now.strftime('%H:%M')
         return hours.get('open', '00:00') <= current_time <= hours.get('close', '23:59')
+
+    @property
+    def closure_status(self):
+        """Structured closure info for frontend display."""
+        if self.is_manually_closed:
+            return {
+                'is_open': False,
+                'reason': self.closure_reason or 'Restaurant is temporarily closed',
+                'status': 'manually_closed',
+            }
+        from django.utils import timezone
+        now = timezone.localtime()
+        day = now.strftime('%a').lower()[:3]
+        hours = self.operating_hours.get(day)
+        if not hours:
+            return {
+                'is_open': False,
+                'reason': 'Restaurant is closed today',
+                'status': 'closed_today',
+            }
+        current_time = now.strftime('%H:%M')
+        if hours.get('open', '00:00') <= current_time <= hours.get('close', '23:59'):
+            return {'is_open': True, 'reason': '', 'status': 'open'}
+        return {
+            'is_open': False,
+            'reason': f"Restaurant is closed. Hours: {hours.get('open')} - {hours.get('close')}",
+            'status': 'outside_hours',
+        }
 
 
 class Table(TimeStampedModel):

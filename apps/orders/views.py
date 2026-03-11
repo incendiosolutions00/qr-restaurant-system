@@ -7,7 +7,8 @@ from apps.accounts.permissions import IsKitchenStaff, IsRestaurantMember
 from apps.menu.models import MenuItem, MenuItemVariant, Modifier
 from apps.orders.models import Order, OrderItem, OrderItemModifier
 from apps.orders.serializers import (
-    CustomerOrderCreateSerializer, OrderSerializer, OrderStatusUpdateSerializer,
+    CustomerOrderCreateSerializer, OnlineOrderCreateSerializer,
+    OrderSerializer, OrderStatusUpdateSerializer,
 )
 from apps.tenants.models import Restaurant, Table, TableSession
 
@@ -35,6 +36,11 @@ class CustomerPlaceOrderView(generics.CreateAPIView):
                 {'detail': 'Restaurant not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # Check if restaurant is open
+        if not restaurant.is_open:
+            reason = restaurant.closure_status.get('reason', 'Restaurant is currently closed.')
+            return Response({'detail': reason}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate table
         try:
@@ -128,6 +134,77 @@ class CustomerOrderStatusView(generics.RetrieveAPIView):
         return Order.objects.filter(
             restaurant__slug=self.kwargs['slug'],
         ).prefetch_related('items__modifiers')
+
+
+class OnlineOrderView(generics.CreateAPIView):
+    """Public — customer places a delivery/takeaway order online (no QR scan)."""
+    serializer_class = OnlineOrderCreateSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @transaction.atomic
+    def create(self, request, slug, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            restaurant = Restaurant.objects.get(
+                slug=slug, is_active=True, is_approved=True
+            )
+        except Restaurant.DoesNotExist:
+            return Response(
+                {'detail': 'Restaurant not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not restaurant.is_open:
+            reason = restaurant.closure_status.get('reason', 'Restaurant is currently closed.')
+            return Response({'detail': reason}, status=status.HTTP_400_BAD_REQUEST)
+
+        order = Order.objects.create(
+            restaurant=restaurant,
+            customer_name=data['customer_name'],
+            customer_phone=data['customer_phone'],
+            delivery_address=data.get('delivery_address', ''),
+            order_type=data['order_type'],
+            special_instructions=data.get('special_instructions', ''),
+        )
+
+        for item_data in data['items']:
+            menu_item = MenuItem.objects.get(
+                pk=item_data['menu_item_id'], restaurant=restaurant
+            )
+            variant = None
+            if item_data.get('variant_id'):
+                variant = MenuItemVariant.objects.get(
+                    pk=item_data['variant_id'], menu_item=menu_item
+                )
+            unit_price = variant.total_price if variant else menu_item.price
+            order_item = OrderItem.objects.create(
+                order=order,
+                menu_item=menu_item,
+                variant=variant,
+                quantity=item_data.get('quantity', 1),
+                unit_price=unit_price,
+                subtotal=unit_price * item_data.get('quantity', 1),
+                special_instructions=item_data.get('special_instructions', ''),
+            )
+            for mod_id in item_data.get('modifier_ids', []):
+                modifier = Modifier.objects.get(pk=mod_id)
+                OrderItemModifier.objects.create(
+                    order_item=order_item,
+                    modifier=modifier,
+                    price=modifier.price,
+                )
+            if item_data.get('modifier_ids'):
+                order_item.recalculate_with_modifiers()
+
+        order.calculate_totals()
+
+        return Response(
+            OrderSerializer(order).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # ─── RESTAURANT STAFF — ORDER MANAGEMENT ────────────────────────────────────

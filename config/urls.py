@@ -7,7 +7,8 @@ from django.views.generic import RedirectView
 from apps.core.template_views import (
     admin_dashboard, admin_deals, admin_kitchen, admin_login, admin_menu,
     admin_orders, admin_register, admin_reports, admin_settings, admin_staff,
-    admin_tables, customer_menu, customer_order_status, superadmin_dashboard,
+    admin_tables, customer_menu, customer_order_online, customer_order_status,
+    superadmin_dashboard,
     superadmin_orders_revenue, superadmin_plans, superadmin_restaurants,
     superadmin_users,
 )
@@ -22,6 +23,7 @@ urlpatterns = [
     # ─── Frontend Template Pages ─────────────────────────────────
     # Customer pages
     path('r/<slug:slug>/table/<int:table_id>/menu/', customer_menu, name='customer-menu-page'),
+    path('r/<slug:slug>/order-online/', customer_order_online, name='customer-order-online-page'),
     path('r/<slug:slug>/order/<str:order_number>/', customer_order_status, name='customer-order-page'),
 
     # Admin panel pages

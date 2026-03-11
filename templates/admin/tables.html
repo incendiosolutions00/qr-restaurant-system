@@ -72,6 +72,7 @@ async function loadTables() {
                     <div class="mt-3 d-flex justify-content-center gap-2">
                         <button class="btn btn-sm btn-outline-primary" onclick="showQR(${t.id}, '${t.qr_code_url || ''}', ${t.number})" title="View QR"><i class="fas fa-qrcode"></i></button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="regenerateQR(${t.id})" title="Regenerate QR"><i class="fas fa-sync-alt"></i></button>
+                        ${t.status !== 'available' ? `<button class="btn btn-sm btn-outline-warning" onclick="resetTable(${t.id})" title="Reset Table"><i class="fas fa-broom"></i></button>` : ''}
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteTable(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
@@ -112,6 +113,12 @@ function showQR(id, url, number) {
 
 async function regenerateQR(id) {
     try { await api.post(`/restaurant/tables/${id}/regenerate-qr/`); showToast('QR regenerated!', 'success'); loadTables(); }
+    catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function resetTable(id) {
+    if (!confirm('Reset this table to available? Active session will be closed.')) return;
+    try { await api.post(`/restaurant/tables/${id}/reset/`); showToast('Table reset to available!', 'success'); loadTables(); }
     catch (e) { showToast(e.message, 'danger'); }
 }
 

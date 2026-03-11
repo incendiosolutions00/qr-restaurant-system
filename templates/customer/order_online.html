@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Menu — Restaurant{% endblock %}
+{% block title %}Order Online{% endblock %}
 
 {% block body %}
 <!-- Restaurant Header -->
@@ -11,9 +11,12 @@
     <p class="mb-2 opacity-75" id="restaurantAddress"></p>
     <span id="openBadge"></span>
     <div class="mt-2">
-        <small class="opacity-50">Table <strong id="tableNumber">-</strong></small>
+        <span class="badge bg-light text-dark"><i class="fas fa-motorcycle me-1"></i> Online Order</span>
     </div>
 </div>
+
+<!-- Closure Banner Placeholder -->
+<div id="closureBannerArea"></div>
 
 <!-- Search Bar -->
 <div class="px-3 mb-3">
@@ -111,8 +114,25 @@
                     <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="cartGrandTotal" style="color:var(--primary)">Rs.0</span></div>
                 </div>
                 <div class="w-100 mt-2">
-                    <input type="text" class="form-control mb-2" id="customerName" placeholder="Your Name (optional)">
-                    <input type="text" class="form-control mb-2" id="customerPhone" placeholder="Phone Number (optional)">
+                    <!-- Order Type -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Order Type</label>
+                        <div class="d-flex gap-2">
+                            <div class="form-check flex-fill">
+                                <input class="form-check-input" type="radio" name="orderType" id="typeTakeaway" value="takeaway" checked onchange="toggleDelivery()">
+                                <label class="form-check-label fw-bold" for="typeTakeaway"><i class="fas fa-shopping-bag me-1"></i>Takeaway</label>
+                            </div>
+                            <div class="form-check flex-fill">
+                                <input class="form-check-input" type="radio" name="orderType" id="typeDelivery" value="delivery" onchange="toggleDelivery()">
+                                <label class="form-check-label fw-bold" for="typeDelivery"><i class="fas fa-motorcycle me-1"></i>Delivery</label>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="text" class="form-control mb-2" id="customerName" placeholder="Your Name *" required>
+                    <input type="text" class="form-control mb-2" id="customerPhone" placeholder="Phone Number *" required>
+                    <div id="deliveryAddressDiv" style="display:none;">
+                        <textarea class="form-control mb-2" id="deliveryAddress" rows="2" placeholder="Delivery Address *"></textarea>
+                    </div>
                     <textarea class="form-control mb-3" id="orderInstructions" rows="2" placeholder="Any special instructions for the order?"></textarea>
                     <button class="btn btn-primary-custom w-100 py-3 fw-bold fs-5" onclick="placeOrder()" id="placeOrderBtn">
                         <i class="fas fa-check-circle me-2"></i>Place Order
@@ -131,7 +151,7 @@
             <h3 class="fw-bold mt-2">Order Placed!</h3>
             <p class="text-muted">Your order number is</p>
             <h2 class="fw-bold" style="color:var(--primary)" id="successOrderNumber"></h2>
-            <p class="text-muted">We'll start preparing your food right away.</p>
+            <p class="text-muted">We'll prepare your order shortly.</p>
             <a id="trackOrderLink" class="btn btn-primary-custom mt-2" href="#">
                 <i class="fas fa-map-marker-alt me-2"></i>Track Order
             </a>
@@ -143,11 +163,8 @@
 {% block extra_js %}
 <script>
 // ─── State ────────────────────────────────────────────────────────────────
-const pathParts = window.location.pathname.split('/');
-const SLUG = pathParts[2];
-const TABLE_ID = pathParts[4];
+const SLUG = '{{ slug }}';
 let restaurantData = null;
-let sessionData = null;
 let menuData = [];
 let cart = [];
 let currentItem = null;
@@ -158,36 +175,29 @@ let modalQty = 1;
 // ─── Load Everything ──────────────────────────────────────────────────────
 async function init() {
     try {
-        // Load table info + session
-        const info = await api.publicGet(`/r/${SLUG}/table/${TABLE_ID}/`);
-        restaurantData = info.restaurant;
-        sessionData = info.session;
+        restaurantData = await api.publicGet(`/r/${SLUG}/`);
 
         document.getElementById('restaurantName').textContent = restaurantData.name;
         document.getElementById('restaurantAddress').textContent = `${restaurantData.address}, ${restaurantData.city}`;
-        document.getElementById('tableNumber').textContent = info.table.number;
         document.getElementById('openBadge').innerHTML = restaurantData.is_open
             ? '<span class="badge-open">Open Now</span>'
             : '<span class="badge-closed">Closed</span>';
 
-        // Show closure banner if restaurant is closed
+        // Show closure banner if closed
         if (!restaurantData.is_open) {
             const cs = restaurantData.closure_status || {};
             const reason = cs.reason || 'Restaurant is currently closed';
-            document.getElementById('menuContainer').insertAdjacentHTML('beforebegin', `
+            document.getElementById('closureBannerArea').innerHTML = `
                 <div class="alert alert-danger mx-3 text-center mb-3" style="border-radius:12px;">
                     <i class="fas fa-store-slash me-2"></i><strong>${reason}</strong>
                     <p class="mb-0 mt-1 small text-muted">You can browse the menu, but ordering is currently unavailable.</p>
-                </div>
-            `);
+                </div>`;
         }
 
-        // Load menu
         menuData = await api.publicGet(`/r/${SLUG}/menu/`);
         renderCategories();
         renderMenu();
 
-        // Load deals
         const deals = await api.publicGet(`/r/${SLUG}/deals/`);
         if (deals.length > 0) renderDeals(deals);
     } catch (e) {
@@ -416,7 +426,7 @@ function renderCartItems() {
                 ${item.variant_name ? `<small class="text-muted">${item.variant_name}</small><br>` : ''}
                 ${item.modifier_names.length ? `<small class="text-muted">${item.modifier_names.join(', ')}</small><br>` : ''}
                 ${item.special_instructions ? `<small class="text-info"><i class="fas fa-comment"></i> ${item.special_instructions}</small>` : ''}
-                <div class="mt-1"><strong>${formatPrice(item.unit_price)} × ${item.quantity}</strong></div>
+                <div class="mt-1"><strong>${formatPrice(item.unit_price)} x ${item.quantity}</strong></div>
             </div>
             <div class="text-end">
                 <div class="fw-bold mb-1">${formatPrice(item.unit_price * item.quantity)}</div>
@@ -432,10 +442,25 @@ function renderCartItems() {
     document.getElementById('cartGrandTotal').textContent = formatPrice(subtotal + tax + service);
 }
 
+// ─── Delivery Toggle ──────────────────────────────────────────────────────
+function toggleDelivery() {
+    const isDelivery = document.getElementById('typeDelivery').checked;
+    document.getElementById('deliveryAddressDiv').style.display = isDelivery ? 'block' : 'none';
+}
+
 // ─── Place Order ──────────────────────────────────────────────────────────
 async function placeOrder() {
     if (cart.length === 0) return showToast('Cart is empty!', 'warning');
     if (restaurantData && !restaurantData.is_open) return showToast('Restaurant is currently closed. Orders cannot be placed.', 'danger');
+
+    const name = document.getElementById('customerName').value.trim();
+    const phone = document.getElementById('customerPhone').value.trim();
+    const orderType = document.querySelector('input[name="orderType"]:checked').value;
+    const deliveryAddr = document.getElementById('deliveryAddress').value.trim();
+
+    if (!name) return showToast('Please enter your name', 'danger');
+    if (!phone) return showToast('Please enter your phone number', 'danger');
+    if (orderType === 'delivery' && !deliveryAddr) return showToast('Please enter delivery address', 'danger');
 
     const btn = document.getElementById('placeOrderBtn');
     btn.disabled = true;
@@ -443,12 +468,11 @@ async function placeOrder() {
 
     try {
         const orderData = {
-            table_id: parseInt(TABLE_ID),
-            session_id: sessionData?.session_id,
-            customer_name: document.getElementById('customerName').value,
-            customer_phone: document.getElementById('customerPhone').value,
+            customer_name: name,
+            customer_phone: phone,
+            order_type: orderType,
+            delivery_address: deliveryAddr,
             special_instructions: document.getElementById('orderInstructions').value,
-            order_type: 'dine_in',
             items: cart.map(i => ({
                 menu_item_id: i.menu_item_id,
                 variant_id: i.variant_id,
@@ -458,17 +482,14 @@ async function placeOrder() {
             })),
         };
 
-        const order = await api.publicPost(`/r/${SLUG}/orders/`, orderData);
+        const order = await api.publicPost(`/r/${SLUG}/online-orders/`, orderData);
 
-        // Close cart modal
         bootstrap.Modal.getInstance(document.getElementById('cartModal')).hide();
 
-        // Show success
         document.getElementById('successOrderNumber').textContent = `#${order.order_number}`;
         document.getElementById('trackOrderLink').href = `/r/${SLUG}/order/${order.order_number}/`;
         new bootstrap.Modal(document.getElementById('successModal')).show();
 
-        // Clear cart
         cart = [];
         updateCartUI();
     } catch (e) {

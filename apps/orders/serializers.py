@@ -47,7 +47,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'restaurant', 'table', 'table_number',
-            'table_session', 'customer_name', 'customer_phone',
+            'table_session', 'customer_name', 'customer_phone', 'delivery_address',
             'order_type', 'status', 'status_display',
             'subtotal', 'tax_amount', 'service_charge',
             'discount_amount', 'total', 'deal',
@@ -76,6 +76,28 @@ class CustomerOrderCreateSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError('Order must have at least one item.')
         return value
+
+
+class OnlineOrderCreateSerializer(serializers.Serializer):
+    """Customer placing a delivery/takeaway order online (no table)."""
+    customer_name = serializers.CharField(max_length=100)
+    customer_phone = serializers.CharField(max_length=20)
+    order_type = serializers.ChoiceField(choices=['takeaway', 'delivery'])
+    delivery_address = serializers.CharField(required=False, default='')
+    special_instructions = serializers.CharField(required=False, default='')
+    items = OrderItemCreateSerializer(many=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError('Order must have at least one item.')
+        return value
+
+    def validate(self, data):
+        if data['order_type'] == 'delivery' and not data.get('delivery_address'):
+            raise serializers.ValidationError({
+                'delivery_address': 'Delivery address is required for delivery orders.'
+            })
+        return data
 
 
 class OrderStatusUpdateSerializer(serializers.Serializer):

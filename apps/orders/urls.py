@@ -8,6 +8,7 @@ urlpatterns = [
     # Customer (Public)
     path('r/<slug:slug>/orders/', views.CustomerPlaceOrderView.as_view(), name='customer-place-order'),
     path('r/<slug:slug>/orders/<str:order_number>/status/', views.CustomerOrderStatusView.as_view(), name='customer-order-status'),
+    path('r/<slug:slug>/online-orders/', views.OnlineOrderView.as_view(), name='online-order'),
 
     # Restaurant staff
     path('restaurant/orders/', views.OrderListView.as_view(), name='order-list'),

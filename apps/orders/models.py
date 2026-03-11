@@ -37,6 +37,7 @@ class Order(TimeStampedModel):
     )
     customer_name = models.CharField(max_length=100, blank=True)
     customer_phone = models.CharField(max_length=20, blank=True)
+    delivery_address = models.TextField(blank=True)
 
     order_type = models.CharField(
         max_length=20, choices=OrderType.choices, default=OrderType.DINE_IN

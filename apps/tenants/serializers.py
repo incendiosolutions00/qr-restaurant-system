@@ -25,7 +25,8 @@ class RestaurantSerializer(serializers.ModelSerializer):
             'name', 'slug', 'description', 'logo',
             'address', 'city', 'state', 'country', 'phone', 'email', 'website',
             'currency', 'tax_rate', 'service_charge_rate', 'operating_hours',
-            'is_active', 'is_approved', 'is_open', 'table_count',
+            'is_active', 'is_approved', 'is_open', 'is_manually_closed',
+            'closure_reason', 'table_count',
             'plan_name', 'plan_id', 'subscription_status',
             'created_at', 'updated_at',
         ]
@@ -56,6 +57,7 @@ class RestaurantSerializer(serializers.ModelSerializer):
 class RestaurantPublicSerializer(serializers.ModelSerializer):
     """Minimal info shown to customers when they scan QR."""
     is_open = serializers.BooleanField(read_only=True)
+    closure_status = serializers.DictField(read_only=True)
 
     class Meta:
         model = Restaurant
@@ -63,6 +65,7 @@ class RestaurantPublicSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'description', 'logo',
             'address', 'city', 'phone', 'currency',
             'tax_rate', 'service_charge_rate', 'operating_hours', 'is_open',
+            'closure_status',
         ]
 
 

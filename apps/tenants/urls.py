@@ -12,6 +12,7 @@ urlpatterns = [
     path('restaurant/tables/', views.TableListCreateView.as_view(), name='table-list'),
     path('restaurant/tables/<int:pk>/', views.TableDetailView.as_view(), name='table-detail'),
     path('restaurant/tables/<int:pk>/regenerate-qr/', views.regenerate_qr, name='regenerate-qr'),
+    path('restaurant/tables/<int:pk>/reset/', views.reset_table, name='reset-table'),
 
     # Table sessions
     path('restaurant/sessions/', views.TableSessionListView.as_view(), name='session-list'),

@@ -93,6 +93,24 @@ def close_session(request, pk):
     return Response({'detail': 'Session closed successfully.'})
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated, IsManagerOrAbove])
+def reset_table(request, pk):
+    """Reset a table: close any active session and set status to available."""
+    try:
+        table = Table.objects.get(pk=pk, restaurant=request.user.restaurant)
+    except Table.DoesNotExist:
+        return Response({'detail': 'Table not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Close all active sessions for this table
+    for session in TableSession.objects.filter(table=table, is_active=True):
+        session.close_session()
+
+    table.status = Table.Status.AVAILABLE
+    table.save(update_fields=['status', 'updated_at'])
+    return Response(TableSerializer(table, context={'request': request}).data)
+
+
 # ─── SUPER ADMIN — RESTAURANT MANAGEMENT ────────────────────────────────────
 
 class SuperAdminRestaurantListView(generics.ListCreateAPIView):

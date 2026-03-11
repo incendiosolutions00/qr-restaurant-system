@@ -14,6 +14,10 @@ def customer_menu(request, slug, table_id):
     })
 
 
+def customer_order_online(request, slug):
+    return render(request, 'customer/order_online.html', {'slug': slug})
+
+
 def customer_order_status(request, slug, order_number):
     return render(request, 'customer/order_status.html', {
         'slug': slug,

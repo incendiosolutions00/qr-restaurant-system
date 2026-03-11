@@ -32,7 +32,7 @@ class OrderItemCreateSerializer(serializers.Serializer):
     menu_item_id = serializers.IntegerField()
     variant_id = serializers.IntegerField(required=False, allow_null=True)
     quantity = serializers.IntegerField(min_value=1, default=1)
-    special_instructions = serializers.CharField(required=False, default='')
+    special_instructions = serializers.CharField(required=False, default='', allow_blank=True)
     modifier_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=[]
     )
@@ -64,12 +64,12 @@ class CustomerOrderCreateSerializer(serializers.Serializer):
     """Customer placing an order after scanning QR."""
     table_id = serializers.IntegerField()
     session_id = serializers.UUIDField(required=False)
-    customer_name = serializers.CharField(max_length=100, required=False, default='')
-    customer_phone = serializers.CharField(max_length=20, required=False, default='')
+    customer_name = serializers.CharField(max_length=100, required=False, default='', allow_blank=True)
+    customer_phone = serializers.CharField(max_length=20, required=False, default='', allow_blank=True)
     order_type = serializers.ChoiceField(
         choices=Order.OrderType.choices, default='dine_in'
     )
-    special_instructions = serializers.CharField(required=False, default='')
+    special_instructions = serializers.CharField(required=False, default='', allow_blank=True)
     items = OrderItemCreateSerializer(many=True)
 
     def validate_items(self, value):
@@ -83,8 +83,8 @@ class OnlineOrderCreateSerializer(serializers.Serializer):
     customer_name = serializers.CharField(max_length=100)
     customer_phone = serializers.CharField(max_length=20)
     order_type = serializers.ChoiceField(choices=['takeaway', 'delivery'])
-    delivery_address = serializers.CharField(required=False, default='')
-    special_instructions = serializers.CharField(required=False, default='')
+    delivery_address = serializers.CharField(required=False, default='', allow_blank=True)
+    special_instructions = serializers.CharField(required=False, default='', allow_blank=True)
     items = OrderItemCreateSerializer(many=True)
 
     def validate_items(self, value):

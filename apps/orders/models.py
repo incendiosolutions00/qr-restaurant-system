@@ -1,4 +1,5 @@
 import random
+from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
@@ -89,12 +90,11 @@ class Order(TimeStampedModel):
 
     def calculate_totals(self):
         """Recalculate all financial fields from order items."""
-        self.subtotal = sum(item.subtotal for item in self.items.all())
-        self.tax_amount = self.subtotal * (self.restaurant.tax_rate / 100)
-        self.service_charge = self.subtotal * (self.restaurant.service_charge_rate / 100)
-        self.total = (
-            self.subtotal + self.tax_amount + self.service_charge - self.discount_amount
-        )
+        self.subtotal = sum((item.subtotal for item in self.items.all()), Decimal('0'))
+        self.tax_amount = self.subtotal * (self.restaurant.tax_rate / Decimal('100'))
+        self.service_charge = self.subtotal * (self.restaurant.service_charge_rate / Decimal('100'))
+        discount = Decimal(str(self.discount_amount)) if self.discount_amount else Decimal('0')
+        self.total = self.subtotal + self.tax_amount + self.service_charge - discount
         self.save(update_fields=[
             'subtotal', 'tax_amount', 'service_charge', 'total', 'updated_at'
         ])

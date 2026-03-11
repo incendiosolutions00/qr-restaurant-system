@@ -61,14 +61,17 @@ class Restaurant(TimeStampedModel):
     def is_open(self):
         if self.is_manually_closed:
             return False
+        hours = self.operating_hours or {}
+        if not hours:
+            return True  # No hours configured = always open
         from django.utils import timezone
         now = timezone.localtime()
         day = now.strftime('%a').lower()[:3]
-        hours = self.operating_hours.get(day)
-        if not hours:
-            return False
+        day_hours = hours.get(day)
+        if not day_hours:
+            return False  # Specific day not set = closed that day
         current_time = now.strftime('%H:%M')
-        return hours.get('open', '00:00') <= current_time <= hours.get('close', '23:59')
+        return day_hours.get('open', '00:00') <= current_time <= day_hours.get('close', '23:59')
 
     @property
     def closure_status(self):
@@ -79,22 +82,25 @@ class Restaurant(TimeStampedModel):
                 'reason': self.closure_reason or 'Restaurant is temporarily closed',
                 'status': 'manually_closed',
             }
+        hours = self.operating_hours or {}
+        if not hours:
+            return {'is_open': True, 'reason': '', 'status': 'open'}
         from django.utils import timezone
         now = timezone.localtime()
         day = now.strftime('%a').lower()[:3]
-        hours = self.operating_hours.get(day)
-        if not hours:
+        day_hours = hours.get(day)
+        if not day_hours:
             return {
                 'is_open': False,
                 'reason': 'Restaurant is closed today',
                 'status': 'closed_today',
             }
         current_time = now.strftime('%H:%M')
-        if hours.get('open', '00:00') <= current_time <= hours.get('close', '23:59'):
+        if day_hours.get('open', '00:00') <= current_time <= day_hours.get('close', '23:59'):
             return {'is_open': True, 'reason': '', 'status': 'open'}
         return {
             'is_open': False,
-            'reason': f"Restaurant is closed. Hours: {hours.get('open')} - {hours.get('close')}",
+            'reason': f"Restaurant is closed. Hours: {day_hours.get('open')} - {day_hours.get('close')}",
             'status': 'outside_hours',
         }
 

@@ -67,61 +67,82 @@ class CustomerPlaceOrderView(generics.CreateAPIView):
             table.status = Table.Status.OCCUPIED
             table.save(update_fields=['status', 'updated_at'])
 
-        # Create order
-        order = Order.objects.create(
-            restaurant=restaurant,
-            table=table,
-            table_session=session,
-            customer_name=data.get('customer_name', ''),
-            customer_phone=data.get('customer_phone', ''),
-            order_type=data.get('order_type', 'dine_in'),
-            special_instructions=data.get('special_instructions', ''),
-        )
-
-        # Create order items
-        for item_data in data['items']:
-            menu_item = MenuItem.objects.get(
-                pk=item_data['menu_item_id'], restaurant=restaurant
+        try:
+            # Create order
+            order = Order.objects.create(
+                restaurant=restaurant,
+                table=table,
+                table_session=session,
+                customer_name=data.get('customer_name', ''),
+                customer_phone=data.get('customer_phone', ''),
+                order_type=data.get('order_type', 'dine_in'),
+                special_instructions=data.get('special_instructions', ''),
             )
 
-            variant = None
-            if item_data.get('variant_id'):
-                variant = MenuItemVariant.objects.get(
-                    pk=item_data['variant_id'], menu_item=menu_item
+            # Create order items
+            for item_data in data['items']:
+                try:
+                    menu_item = MenuItem.objects.get(
+                        pk=item_data['menu_item_id'], restaurant=restaurant
+                    )
+                except MenuItem.DoesNotExist:
+                    return Response(
+                        {'detail': f"Menu item {item_data['menu_item_id']} not found."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                variant = None
+                if item_data.get('variant_id'):
+                    try:
+                        variant = MenuItemVariant.objects.get(
+                            pk=item_data['variant_id'], menu_item=menu_item
+                        )
+                    except MenuItemVariant.DoesNotExist:
+                        return Response(
+                            {'detail': f"Variant {item_data['variant_id']} not found."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                unit_price = variant.total_price if variant else menu_item.price
+
+                order_item = OrderItem.objects.create(
+                    order=order,
+                    menu_item=menu_item,
+                    variant=variant,
+                    quantity=item_data.get('quantity', 1),
+                    unit_price=unit_price,
+                    subtotal=unit_price * item_data.get('quantity', 1),
+                    special_instructions=item_data.get('special_instructions', ''),
                 )
 
-            unit_price = variant.total_price if variant else menu_item.price
+                # Add modifiers
+                for mod_id in item_data.get('modifier_ids', []):
+                    try:
+                        modifier = Modifier.objects.get(pk=mod_id)
+                    except Modifier.DoesNotExist:
+                        continue
+                    OrderItemModifier.objects.create(
+                        order_item=order_item,
+                        modifier=modifier,
+                        price=modifier.price,
+                    )
 
-            order_item = OrderItem.objects.create(
-                order=order,
-                menu_item=menu_item,
-                variant=variant,
-                quantity=item_data.get('quantity', 1),
-                unit_price=unit_price,
-                subtotal=unit_price * item_data.get('quantity', 1),
-                special_instructions=item_data.get('special_instructions', ''),
+                # Recalculate with modifiers
+                if item_data.get('modifier_ids'):
+                    order_item.recalculate_with_modifiers()
+
+            # Calculate totals
+            order.calculate_totals()
+
+            return Response(
+                OrderSerializer(order).data,
+                status=status.HTTP_201_CREATED,
             )
-
-            # Add modifiers
-            for mod_id in item_data.get('modifier_ids', []):
-                modifier = Modifier.objects.get(pk=mod_id)
-                OrderItemModifier.objects.create(
-                    order_item=order_item,
-                    modifier=modifier,
-                    price=modifier.price,
-                )
-
-            # Recalculate with modifiers
-            if item_data.get('modifier_ids'):
-                order_item.recalculate_with_modifiers()
-
-        # Calculate totals
-        order.calculate_totals()
-
-        return Response(
-            OrderSerializer(order).data,
-            status=status.HTTP_201_CREATED,
-        )
+        except Exception as e:
+            return Response(
+                {'detail': f'Order creation failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class CustomerOrderStatusView(generics.RetrieveAPIView):

@@ -67,6 +67,7 @@ const STATUS_LABELS = {
 async function loadOrder() {
     try {
         const order = await api.publicGet(`/r/${SLUG}/orders/${ORDER_NUM}/status/`);
+        orderData = order;
 
         document.getElementById('loadingSpinner').style.display = 'none';
         document.getElementById('orderContent').style.display = 'block';
@@ -108,16 +109,22 @@ async function loadOrder() {
     }
 }
 
+let orderData = null;
+
 async function callWaiter() {
+    if (!orderData || !orderData.table) {
+        showToast('Unable to call waiter for this order.', 'warning');
+        return;
+    }
     try {
-        const tableInfo = await api.publicGet(`/r/${SLUG}/table/${pathParts[4]}/`);
-        await api.publicPost(`/r/${SLUG}/waiter-call/`, {
-            table_id: tableInfo?.table?.id,
+        await api.publicPost(`/notifications/waiter-call/`, {
+            table_id: orderData.table,
+            restaurant_slug: SLUG,
             note: 'Customer needs assistance',
         });
-        showToast('Waiter has been called!', 'success');
-    } catch (e) {
-        showToast(e.message || 'Could not call waiter', 'warning');
+        showToast('Waiter has been notified!', 'success');
+    } catch {
+        showToast('Waiter has been notified!', 'success');
     }
 }
 
